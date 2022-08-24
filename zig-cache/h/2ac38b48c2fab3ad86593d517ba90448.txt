@@ -1,1 +1,0 @@
-18434 5066549581854458 1660694296983588900 2ee71bba958986f8f51cb101ebe2a28f C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\mingw\lib-common\user32.def.in

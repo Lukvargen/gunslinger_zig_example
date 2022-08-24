@@ -1,1 +1,0 @@
-28469 4222124651722430 1660694296967977100 c52bcfda78c0e3a7dee25c06d8139566 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\mingw\lib-common\msvcrt.def.in

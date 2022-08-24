@@ -1,1 +1,0 @@
-19726 1688849861167122 1661205795888950800 eec5ca0fab34675b48bfc856c62e3285 C:\Programmering\zig-windows\lib\libc\mingw\lib-common\gdi32.def

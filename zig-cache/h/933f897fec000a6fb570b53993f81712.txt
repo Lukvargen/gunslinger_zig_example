@@ -1,2 +1,0 @@
-18 10977524091970282 1661181333905833000 0f9cac17ab8f3b5647cc2e9dad74e7a3 C:\Programmering\zig_projects\first\zig-cache\o\51a0a69f2737759c8f38a9ecfbc97c8b\cimport.h
-25 12947848928794738 1661177573839777500 19562b5c7249f9fe69e9bc05205eedb6 C:\Programmering\zig_projects\first\ccode\test.h

@@ -1,1 +1,0 @@
-8002 3377699721590498 1660694296983588900 e1753f74ef6382d0858716615b9c059c C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\mingw\lib-common\shell32.def

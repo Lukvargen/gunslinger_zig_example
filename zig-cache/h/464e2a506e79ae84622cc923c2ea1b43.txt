@@ -1,2 +1,0 @@
-4114172 16888498602744816 1661211531941420600 cb5efe4f687fd1b1c98639bfbb115466 C:\Programmering\zig_projects\first\zig-cache\o\48ba3340d971fd9f6da8bedbded04f3e\test.obj
-2026162 5629499535376607 1661248764740502600 3b12cb6bc7d5edce7e5e4db131e910c9 C:\Programmering\zig_projects\first\zig-cache\o\86025ef7f166b7ee4fd96feb0e5be1bf\first.exe.obj
