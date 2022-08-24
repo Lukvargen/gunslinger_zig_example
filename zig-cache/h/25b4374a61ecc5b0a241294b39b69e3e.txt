@@ -1,0 +1,2 @@
+46 9007199254825939 1661181364593074900 8c1fdd966885efeb3121f80e97d0b617 C:\Programmering\zig_projects\first\ccode\test.c
+46 9007199254825939 1661181364593074900 8c1fdd966885efeb3121f80e97d0b617 C:\Programmering\zig_projects\first\ccode\test.c

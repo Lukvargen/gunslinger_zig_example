@@ -1,0 +1,1 @@
+3566 7599824372250376 1660694296983588900 b00021203f3e804dee441999708e0bb9 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\mingw\lib-common\Winmm.def

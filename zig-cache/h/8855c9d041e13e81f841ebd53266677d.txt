@@ -1,0 +1,2 @@
+3639531 54606145481887709 1661276459009643700 f8c7d1c23d4388d109b7abefc29a4a0f C:\Programmering\zig_projects\first\zig-cache\o\0b75c935df0d252c700398d26488cfc0\test.obj
+2037424 5629499535376607 1661276460128462500 2ab41e5e736bfaa44719d9ceb94d23a9 C:\Programmering\zig_projects\first\zig-cache\o\86025ef7f166b7ee4fd96feb0e5be1bf\first.exe.obj

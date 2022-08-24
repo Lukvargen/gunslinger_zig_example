@@ -1,0 +1,14 @@
+111 9007199254825939 1661181446320049300 3d80781cdc7eebda935373158f615d14 C:\Programmering\zig_projects\first\ccode\test.c
+111 9007199254825939 1661181446320049300 3d80781cdc7eebda935373158f615d14 C:\Programmering\zig_projects\first\ccode\test.c
+63562 2533274791443796 1660694295731899200 6c967376451e82cfacd9a1391f1fccc5 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\stdio.h
+1196 4222124651704781 1660694295075627800 0752d27fae05d711b4e629767f612001 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\corecrt_stdio_config.h
+21881 5066549581836747 1660694295075627800 9a15405b3ec1aa09e5dbf401cc230e5b C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\corecrt.h
+17605 1970324838023346 1660694294981874500 5740aec30ab6f78c80811c4fa9d82363 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\_mingw.h
+11677 1688849861312692 1660694294981874500 d6c1a09e4300f07fc52199c471b6e963 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\_mingw_mac.h
+3539 1970324838023350 1660694294981874500 bb63fe3b1e111d6c0b4ef59c8c5ed0ce C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\_mingw_secapi.h
+1471 5066549581832367 1660694294044339400 ca3e834cd5aa6c951255be3c0f1a0d47 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\include\vadefs.h
+2875 1970324838023009 1660694295796095900 619ded4f9e0da5046c38bce763a7cc3a C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\vadefs.h
+92 4503599628418045 1660694295684998000 933adfa2ef297ed182df14bb3d34b1a6 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\sdks\_mingw_ddk.h
+873 2251799814734005 1660694294981874500 9687abb195f71c53d77e845b78c3d6c9 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\_mingw_off_t.h
+2405 2814749768154548 1660694295747505500 4c7cc14a436c7de6908e162f01cc38b4 C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\swprintf.inl
+40269 2533274791443509 1660694295700620900 d4f2c5099e59748052d99145ce10893d C:\Programmering\zig-windows-x86_64-0.10.0-dev.3590+a12abc6d6\lib\libc\include\any-windows-any\sec_api\stdio_s.h

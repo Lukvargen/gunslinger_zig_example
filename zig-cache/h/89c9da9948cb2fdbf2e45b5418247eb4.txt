@@ -1,0 +1,2 @@
+3639765 8725724279198530 1661295685332465700 67e6b9ce4cd7e7ae45edf05d1d5b463e C:\Programmering\zig_projects\first\zig-cache\o\a65a29c8032493d2506cfadafe9583e1\test.obj
+2074523 5629499535376607 1661295686463543600 29e2ea349a8b8e3d5bb12498a561a840 C:\Programmering\zig_projects\first\zig-cache\o\86025ef7f166b7ee4fd96feb0e5be1bf\first.exe.obj
