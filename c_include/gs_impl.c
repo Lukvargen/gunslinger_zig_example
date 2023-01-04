@@ -20,3 +20,7 @@ int hello_from_c()
     gs_println("printing from C");
     return 123;
 }
+
+//char[] 
+
+

@@ -29,8 +29,8 @@ pub fn build(b: *std.build.Builder) void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
 
-    exe.addIncludeDir("c_include");
-    exe.addIncludeDir("third_party/include");
+    exe.addIncludePath("c_include");
+    exe.addIncludePath("third_party/include");
 
     exe.install();
 

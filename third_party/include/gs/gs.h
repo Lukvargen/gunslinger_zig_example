@@ -2560,8 +2560,9 @@ GS_API_DECL void gs_paged_allocator_clear(gs_paged_allocator_t* pa);
 // Useful Utility
 #define gs_v2(x,y)  gs_vec2_ctor(x,y)
 #define gs_v3(x,y,z)  gs_vec3_ctor(x,y,z)
-#define gs_v4(...)  gs_vec4_ctor(__VA_ARGS__)
-#define gs_quat(...) gs_quat_ctor(__VA_ARGS__)
+#define gs_v4(x,y,z,w)  gs_vec4_ctor(x,y,z,w)
+#define gs_quat(x,y,z,w) gs_quat_ctor(x,y,z,w)
+
 
 #define gs_v2s(__S)  gs_vec2_ctor((__S), (__S))
 #define gs_v3s(__S)  gs_vec3_ctor((__S), (__S), (__S))
