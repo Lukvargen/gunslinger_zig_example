@@ -100,7 +100,7 @@ bool32_t gs_audio_load_wav_data_from_file
 
     if (!*samples) {
         *samples = NULL; 
-        gs_println("WARNING: Could not load .ogg file: %s", file_path);
+        gs_println("WARNING: Could not load .wav file: %s", file_path);
         return false; 
     }
 
@@ -128,7 +128,7 @@ bool32_t gs_audio_load_mp3_data_from_file
 
     if (!*samples) {
         *samples = NULL; 
-        gs_println("WARNING: Could not load .ogg file: %s", file_path);
+        gs_println("WARNING: Could not load .mp3 file: %s", file_path);
         return false; 
     }
 
@@ -220,16 +220,22 @@ gs_handle(gs_audio_instance_t) gs_audio_instance_create(gs_audio_instance_decl_t
 }
 
 /* Audio play instance data */
-void gs_audio_play_source(gs_handle(gs_audio_source_t) src, float volume)
+void gs_audio_play_source_with_pitch(gs_handle(gs_audio_source_t) src, float volume, float pitch)
 {
     // Construct instance data from source and play
     gs_audio_t* audio = gs_subsystem(audio);
     gs_audio_instance_decl_t decl = gs_default_val();
     decl.src = src;
     decl.volume = gs_clamp(volume, audio->min_audio_volume, audio->max_audio_volume);
+    decl.pitch = gs_max(pitch, 0);
     decl.persistent = false;
     gs_handle(gs_audio_instance_t) inst = gs_audio_instance_create(&decl);
     gs_audio_play(inst);
+}
+
+void gs_audio_play_source(gs_handle(gs_audio_source_t) src, float volume)
+{
+    gs_audio_play_source_with_pitch(src, volume, 1.0f);
 }
 
 // Helper macros
@@ -405,19 +411,6 @@ int32_t gs_audio_get_num_channels(gs_handle(gs_audio_source_t) src)
 #undef GS_AUDIO_IMPL_DEFAULT
 #endif // GS_AUDIO_IMPL_DEFAULT
 
-// hack.. but I dont want to use gs audio
-#ifndef GS_AUDIO_IMPL_DEFAULT
-
-gs_handle(gs_audio_source_t) gs_audio_load_from_file(const char* file_path) {}
-gs_audio_t* gs_audio_create() {}
-gs_result gs_audio_init(gs_audio_t* audio) {}
-gs_result gs_audio_shutdown(gs_audio_t* audio) {}
-void gs_audio_destroy(gs_audio_t* audio) {}
-
-#endif
-
-
-
 /*=============================
 // Miniaudio Impl
 =============================*/
@@ -505,7 +498,7 @@ void ma_audio_commit(ma_device* device, void* output, const void* input, ma_uint
                 s16 start_right_sample;
 
                 // Not sure about this line of code...
-                f64 target_sample_position = start_sample_position + (f64)channels * (f64)1.f;
+                f64 target_sample_position = start_sample_position + (f64)channels * (f64)inst->pitch;
 
                 if (target_sample_position >= src->sample_count)
                 {
@@ -654,7 +647,7 @@ gs_result gs_audio_shutdown(gs_audio_t* audio)
 
     ma_context_uninit(&ma->context);
     ma_device_uninit(&ma->device);
-    ma_mutex_init(&ma->lock);
+    ma_mutex_uninit(&ma->lock);
     
     return GS_RESULT_SUCCESS;
 }

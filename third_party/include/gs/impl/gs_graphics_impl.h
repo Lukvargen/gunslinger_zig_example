@@ -506,7 +506,7 @@ size_t gsgl_calculate_vertex_size_in_bytes(gs_graphics_vertex_attribute_desc_t* 
     return sz;
 }
 
-size_t  gsgl_get_vertex_attr_byte_offest(gs_dyn_array(gs_graphics_vertex_attribute_desc_t) layout, uint32_t idx)
+size_t gsgl_get_vertex_attr_byte_offest(gs_dyn_array(gs_graphics_vertex_attribute_desc_t) layout, uint32_t idx)
 {
     // Recursively calculate offset
     size_t total_offset = 0;
@@ -544,7 +544,8 @@ size_t gsgl_uniform_data_size_in_bytes(gs_graphics_uniform_type type)
 }
 
 /* Graphics Interface Creation / Initialization / Shutdown / Destruction */
-gs_graphics_t* gs_graphics_create()
+GS_API_DECL gs_graphics_t* 
+gs_graphics_create()
 {
     // Construct new graphics interface
     gs_graphics_t* gfx = gs_malloc_init(gs_graphics_t);
@@ -555,7 +556,8 @@ gs_graphics_t* gs_graphics_create()
     return gfx;
 }
 
-void gs_graphics_destroy(gs_graphics_t* graphics)
+GS_API_DECL void 
+gs_graphics_destroy(gs_graphics_t* graphics)
 {
     // Free all resources (assuming they've been freed from the GPU already)
     if (graphics == NULL) return;
@@ -608,72 +610,17 @@ void gs_graphics_destroy(gs_graphics_t* graphics)
     gs_dyn_array_free(ogl->uniform_data.i32);
     gs_dyn_array_free(ogl->uniform_data.ui32);
 
+    // Free data cache
+    gs_dyn_array_free(ogl->cache.vdecls);
+
     gs_free(graphics);
     graphics = NULL;
 }
 
-void gs_graphics_init(gs_graphics_t* graphics)
-{
-    // Push back 0 handles into slot arrays (for 0 init validation)
-    gsgl_data_t* ogl = (gsgl_data_t*)graphics->user_data;
 
-    gs_slot_array_insert(ogl->shaders, 0);  
-    gs_slot_array_insert(ogl->vertex_buffers, 0);   
-    gs_slot_array_insert(ogl->index_buffers, 0);    
-    gs_slot_array_insert(ogl->frame_buffers, 0);    
-
-    gsgl_uniform_list_t ul = gs_default_val();
-    gsgl_uniform_buffer_t ub = gs_default_val();
-    gsgl_pipeline_t pip = gs_default_val();
-    gsgl_renderpass_t rp = gs_default_val();
-    gsgl_texture_t tex = gs_default_val();
-    gsgl_storage_buffer_t sb = gs_default_val();
-
-    gs_slot_array_insert(ogl->uniforms, ul);
-    gs_slot_array_insert(ogl->pipelines, pip);
-    gs_slot_array_insert(ogl->renderpasses, rp);
-    gs_slot_array_insert(ogl->uniform_buffers, ub);
-    gs_slot_array_insert(ogl->textures, tex);
-    gs_slot_array_insert(ogl->storage_buffers, sb);
-
-    // Construct vao then bind
-    glGenVertexArrays(1, &ogl->cache.vao);      
-    glBindVertexArray(ogl->cache.vao);
-
-    // Reset data cache for rendering ops
-    gsgl_reset_data_cache(&ogl->cache);
-
-    // Init info object
-    gs_graphics_info_t* info = &gs_subsystem(graphics)->info;
-
-    // Major/Minor version
-    glGetIntegerv(GL_MAJOR_VERSION, (GLint*)&info->major_version);
-    glGetIntegerv(GL_MINOR_VERSION, (GLint*)&info->minor_version);
-
-    // Max texture units
-    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, (GLint*)&info->max_texture_units);
-
-    // Compute shader info
-    CHECK_GL_CORE(
-        info->compute.available = info->major_version >= 4 && info->minor_version >= 3;
-        if (info->compute.available)
-        {
-            // Work group counts
-            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, (int32_t*)&info->compute.max_work_group_count[0]);
-            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, (int32_t*)&info->compute.max_work_group_count[1]);
-            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, (int32_t*)&info->compute.max_work_group_count[2]);
-            // Work group sizes
-            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, (int32_t*)&info->compute.max_work_group_size[0]);
-            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, (int32_t*)&info->compute.max_work_group_size[1]);
-            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, (int32_t*)&info->compute.max_work_group_size[2]);
-            // Work group invocations
-            glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, (int32_t*)&info->compute.max_work_group_invocations);
-        }
-    )
-}
-
-void gs_graphics_shutdown(gs_graphics_t* graphics)
-{
+GS_API_DECL void 
+gs_graphics_shutdown(gs_graphics_t* graphics)
+{ 
 }
 
 gsgl_texture_t gl_texture_update_internal(const gs_graphics_texture_desc_t* desc, uint32_t hndl)
@@ -788,9 +735,13 @@ gsgl_texture_t gl_texture_update_internal(const gs_graphics_texture_desc_t* desc
         glGenerateMipmap(target);
     }
 
-    // float aniso = 0.0f;
-    // glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &aniso);
-    // glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, aniso); 
+    // Need to make sure this is available before being able to use
+
+    CHECK_GL_CORE(
+        float aniso = 0.0f;
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &aniso);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, aniso); 
+    );
 
     glTexParameteri(target, GL_TEXTURE_WRAP_S, texture_wrap_s);
     glTexParameteri(target, GL_TEXTURE_WRAP_T, texture_wrap_t);
@@ -810,7 +761,8 @@ gsgl_texture_t gl_texture_update_internal(const gs_graphics_texture_desc_t* desc
 }
 
 /* Resource Creation */
-GS_API_DECL gs_handle(gs_graphics_texture_t) gs_graphics_texture_create(const gs_graphics_texture_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_texture_t) 
+gs_graphics_texture_create_impl(const gs_graphics_texture_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gsgl_texture_t tex = gl_texture_update_internal(desc, 0);
@@ -818,7 +770,8 @@ GS_API_DECL gs_handle(gs_graphics_texture_t) gs_graphics_texture_create(const gs
     return (gs_handle_create(gs_graphics_texture_t, gs_slot_array_insert(ogl->textures, tex)));
 }
 
-GS_API_DECL gs_handle(gs_graphics_uniform_t) gs_graphics_uniform_create(const gs_graphics_uniform_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_uniform_t) 
+gs_graphics_uniform_create_impl(const gs_graphics_uniform_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
@@ -862,7 +815,8 @@ GS_API_DECL gs_handle(gs_graphics_uniform_t) gs_graphics_uniform_create(const gs
     return gs_handle_create(gs_graphics_uniform_t, gs_slot_array_insert(ogl->uniforms, ul));
 }
 
-GS_API_DECL gs_handle(gs_graphics_vertex_buffer_t) gs_graphics_vertex_buffer_create(const gs_graphics_vertex_buffer_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_vertex_buffer_t) 
+gs_graphics_vertex_buffer_create_impl(const gs_graphics_vertex_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gs_handle(gs_graphics_vertex_buffer_t) hndl = gs_default_val();
@@ -883,7 +837,8 @@ GS_API_DECL gs_handle(gs_graphics_vertex_buffer_t) gs_graphics_vertex_buffer_cre
     return hndl;
 }
 
-GS_API_DECL gs_handle(gs_graphics_index_buffer_t) gs_graphics_index_buffer_create(const gs_graphics_index_buffer_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_index_buffer_t) 
+gs_graphics_index_buffer_create_impl(const gs_graphics_index_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gs_handle(gs_graphics_index_buffer_t) hndl = gs_default_val();
@@ -904,7 +859,8 @@ GS_API_DECL gs_handle(gs_graphics_index_buffer_t) gs_graphics_index_buffer_creat
     return hndl;
 }
 
-GS_API_DECL gs_handle(gs_graphics_uniform_buffer_t) gs_graphics_uniform_buffer_create(const gs_graphics_uniform_buffer_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_uniform_buffer_t) 
+gs_graphics_uniform_buffer_create_impl(const gs_graphics_uniform_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gs_handle(gs_graphics_uniform_buffer_t) hndl = gs_default_val();
@@ -930,7 +886,8 @@ GS_API_DECL gs_handle(gs_graphics_uniform_buffer_t) gs_graphics_uniform_buffer_c
     return hndl;
 }
 
-GS_API_DECL gs_handle(gs_graphics_storage_buffer_t) gs_graphics_storage_buffer_create(const gs_graphics_storage_buffer_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_storage_buffer_t) 
+gs_graphics_storage_buffer_create_impl(const gs_graphics_storage_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gs_handle(gs_graphics_storage_buffer_t) hndl = gs_default_val();
@@ -964,7 +921,8 @@ GS_API_DECL gs_handle(gs_graphics_storage_buffer_t) gs_graphics_storage_buffer_c
     return hndl;
 }
 
-GS_API_DECL gs_handle(gs_graphics_framebuffer_t) gs_graphics_framebuffer_create(const gs_graphics_framebuffer_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_framebuffer_t) 
+gs_graphics_framebuffer_create_impl(const gs_graphics_framebuffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gs_handle(gs_graphics_framebuffer_t) hndl = gs_default_val();
@@ -978,7 +936,8 @@ GS_API_DECL gs_handle(gs_graphics_framebuffer_t) gs_graphics_framebuffer_create(
 #define GSGL_GRAPHICS_SHADER_PIPELINE_COMPUTE   0x02
 #define GSGL_GRAPHICS_MAX_SID                   128
 
-GS_API_DECL gs_handle(gs_graphics_shader_t) gs_graphics_shader_create(const gs_graphics_shader_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_shader_t) 
+gs_graphics_shader_create_impl(const gs_graphics_shader_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gsgl_shader_t shader = 0;
@@ -1040,7 +999,8 @@ GS_API_DECL gs_handle(gs_graphics_shader_t) gs_graphics_shader_create(const gs_g
             free(log);
             log = NULL;
 
-            gs_assert(false);
+            // gs_assert(false);
+            return gs_handle_invalid(gs_graphics_shader_t);
         }
 
         // Attach shader to program
@@ -1104,7 +1064,8 @@ GS_API_DECL gs_handle(gs_graphics_shader_t) gs_graphics_shader_create(const gs_g
     return (gs_handle_create(gs_graphics_shader_t, gs_slot_array_insert(ogl->shaders, shader)));
 }
 
-GS_API_DECL gs_handle(gs_graphics_renderpass_t) gs_graphics_renderpass_create(const gs_graphics_renderpass_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_renderpass_t) 
+gs_graphics_renderpass_create_impl(const gs_graphics_renderpass_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
@@ -1126,7 +1087,8 @@ GS_API_DECL gs_handle(gs_graphics_renderpass_t) gs_graphics_renderpass_create(co
     return (gs_handle_create(gs_graphics_renderpass_t, gs_slot_array_insert(ogl->renderpasses, pass)));
 }
 
-GS_API_DECL gs_handle(gs_graphics_pipeline_t) gs_graphics_pipeline_create(const gs_graphics_pipeline_desc_t* desc)
+GS_API_DECL gs_handle(gs_graphics_pipeline_t) 
+gs_graphics_pipeline_create_impl(const gs_graphics_pipeline_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
@@ -1151,48 +1113,60 @@ GS_API_DECL gs_handle(gs_graphics_pipeline_t) gs_graphics_pipeline_create(const 
 }
 
 // Resource Destruction
-GS_API_DECL void gs_graphics_texture_destroy(gs_handle(gs_graphics_texture_t) hndl)
+GS_API_DECL void 
+gs_graphics_texture_destroy_impl(gs_handle(gs_graphics_texture_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->textures, hndl.id)) return;
     gsgl_texture_t* tex = gs_slot_array_getp(ogl->textures, hndl.id);
     glDeleteTextures(1, &tex->id);
     gs_slot_array_erase(ogl->textures, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_uniform_destroy(gs_handle(gs_graphics_uniform_t) hndl)
+GS_API_DECL void 
+gs_graphics_uniform_destroy_impl(gs_handle(gs_graphics_uniform_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data; 
+    if (!gs_slot_array_handle_valid(ogl->uniforms, hndl.id)) return;
     gsgl_uniform_list_t* ul = gs_slot_array_getp(ogl->uniforms, hndl.id);
     gs_dyn_array_free(ul->uniforms);
     gs_slot_array_erase(ogl->uniforms, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_shader_destroy(gs_handle(gs_graphics_shader_t) hndl)
+GS_API_DECL void 
+gs_graphics_shader_destroy_impl(gs_handle(gs_graphics_shader_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->shaders, hndl.id)) return;
     glDeleteProgram(gs_slot_array_get(ogl->shaders, hndl.id));
     gs_slot_array_erase(ogl->shaders, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_vertex_buffer_destroy(gs_handle(gs_graphics_vertex_buffer_t) hndl)
+GS_API_DECL void 
+gs_graphics_vertex_buffer_destroy_impl(gs_handle(gs_graphics_vertex_buffer_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->vertex_buffers, hndl.id)) return;
     gsgl_buffer_t buffer = gs_slot_array_get(ogl->vertex_buffers, hndl.id); 
     glDeleteBuffers(1, &buffer);
     gs_slot_array_erase(ogl->vertex_buffers, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_index_buffer_destroy(gs_handle(gs_graphics_index_buffer_t) hndl)
+GS_API_DECL void 
+gs_graphics_index_buffer_destroy_impl(gs_handle(gs_graphics_index_buffer_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->index_buffers, hndl.id)) return;
     gsgl_buffer_t buffer = gs_slot_array_get(ogl->index_buffers, hndl.id); 
     glDeleteBuffers(1, &buffer);
     gs_slot_array_erase(ogl->index_buffers, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_uniform_buffer_destroy(gs_handle(gs_graphics_uniform_buffer_t) hndl)
+GS_API_DECL void 
+gs_graphics_uniform_buffer_destroy_impl(gs_handle(gs_graphics_uniform_buffer_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->uniform_buffers, hndl.id)) return;
     gsgl_uniform_buffer_t* u = gs_slot_array_getp(ogl->uniform_buffers, hndl.id);
 
     // Delete buffer (if needed)
@@ -1202,23 +1176,44 @@ GS_API_DECL void gs_graphics_uniform_buffer_destroy(gs_handle(gs_graphics_unifor
     gs_slot_array_erase(ogl->uniform_buffers, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_framebuffer_destroy(gs_handle(gs_graphics_framebuffer_t) hndl)
+GS_API_DECL void 
+gs_graphics_storage_buffer_destroy_impl(gs_handle(gs_graphics_storage_buffer_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->storage_buffers, hndl.id)) return;
+    gsgl_storage_buffer_t* sb = gs_slot_array_getp(ogl->storage_buffers, hndl.id);
+
+    // Delete buffer (if needed)
+    glDeleteBuffers(1, &sb->buffer);
+
+    // Delete from slot array
+    gs_slot_array_erase(ogl->storage_buffers, hndl.id);
+}
+
+GS_API_DECL void 
+gs_graphics_framebuffer_destroy_impl(gs_handle(gs_graphics_framebuffer_t) hndl)
+{
+    gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->frame_buffers, hndl.id)) return;
     gsgl_buffer_t buffer = gs_slot_array_get(ogl->frame_buffers, hndl.id);
     glDeleteFramebuffers(1, &buffer);
     gs_slot_array_erase(ogl->frame_buffers, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_renderpass_destroy(gs_handle(gs_graphics_renderpass_t) hndl)
+GS_API_DECL void 
+gs_graphics_renderpass_destroy_impl(gs_handle(gs_graphics_renderpass_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->renderpasses, hndl.id)) return;
+    // TODO(john): erase all color attachments from renderpasss
     gs_slot_array_erase(ogl->renderpasses, hndl.id);
 }
 
-GS_API_DECL void gs_graphics_pipeline_destroy(gs_handle(gs_graphics_pipeline_t) hndl)
+GS_API_DECL void 
+gs_graphics_pipeline_destroy_impl(gs_handle(gs_graphics_pipeline_t) hndl)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
+    if (!gs_slot_array_handle_valid(ogl->pipelines, hndl.id)) return;
     gsgl_pipeline_t* pip = gs_slot_array_getp(ogl->pipelines, hndl.id);
 
     // Free layout
@@ -1229,7 +1224,8 @@ GS_API_DECL void gs_graphics_pipeline_destroy(gs_handle(gs_graphics_pipeline_t) 
 }
 
 // Resource Query
-GS_API_DECL void gs_graphics_pipeline_desc_query(gs_handle(gs_graphics_pipeline_t) hndl, gs_graphics_pipeline_desc_t* out)
+GS_API_DECL void 
+gs_graphics_pipeline_desc_query(gs_handle(gs_graphics_pipeline_t) hndl, gs_graphics_pipeline_desc_t* out)
 {
     if (!out) return;
 
@@ -1250,7 +1246,8 @@ GS_API_DECL void gs_graphics_pipeline_desc_query(gs_handle(gs_graphics_pipeline_
     } 
 }
 
-GS_API_DECL void gs_graphics_texture_desc_query(gs_handle(gs_graphics_texture_t) hndl, gs_graphics_texture_desc_t* out)
+GS_API_DECL void 
+gs_graphics_texture_desc_query(gs_handle(gs_graphics_texture_t) hndl, gs_graphics_texture_desc_t* out)
 {
     if (!out) return;
 
@@ -1272,18 +1269,17 @@ GS_API_DECL void gs_graphics_texture_desc_query(gs_handle(gs_graphics_texture_t)
 }
 
 // Resource Updates (main thread only) 
-
-GS_API_DECL void gs_graphics_texture_update(gs_handle(gs_graphics_texture_t) hndl, gs_graphics_texture_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_texture_update_impl(gs_handle(gs_graphics_texture_t) hndl, gs_graphics_texture_desc_t* desc)
 {   
     if (!desc) return;
 
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data; 
     gsgl_texture_t* tex = gs_slot_array_getp(ogl->textures, hndl.id); 
-
-    // 
 }
 
-GS_API_DECL void gs_graphics_vertex_buffer_update(gs_handle(gs_graphics_vertex_buffer_t) hndl, gs_graphics_vertex_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_vertex_buffer_update_impl(gs_handle(gs_graphics_vertex_buffer_t) hndl, gs_graphics_vertex_buffer_desc_t* desc)
 { 
     /*
     void __gs_graphics_update_buffer_internal(gs_command_buffer_t* cb, 
@@ -1329,7 +1325,8 @@ GS_API_DECL void gs_graphics_vertex_buffer_update(gs_handle(gs_graphics_vertex_b
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-GS_API_DECL void gs_graphics_index_buffer_update(gs_handle(gs_graphics_index_buffer_t) hndl, gs_graphics_index_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_index_buffer_update_impl(gs_handle(gs_graphics_index_buffer_t) hndl, gs_graphics_index_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gsgl_buffer_t buffer = gs_slot_array_get(ogl->index_buffers, hndl.id);
@@ -1343,7 +1340,8 @@ l:
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 } 
 
-GS_API_DECL void gs_graphics_storage_buffer_update(gs_handle(gs_graphics_storage_buffer_t) hndl, gs_graphics_storage_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_storage_buffer_update_impl(gs_handle(gs_graphics_storage_buffer_t) hndl, gs_graphics_storage_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
     gsgl_storage_buffer_t* sbo = gs_slot_array_getp(ogl->storage_buffers, hndl.id);
@@ -1374,21 +1372,24 @@ do {\
 } while (0)
 
 /* Command Buffer Ops: Pipeline / Pass / Bind / Draw */
-void gs_graphics_renderpass_begin(gs_command_buffer_t* cb, gs_handle(gs_graphics_renderpass_t) hndl)
+GS_API_DECL void 
+gs_graphics_renderpass_begin(gs_command_buffer_t* cb, gs_handle(gs_graphics_renderpass_t) hndl)
 {
     __ogl_push_command(cb, GS_OPENGL_OP_BEGIN_RENDER_PASS, {
         gs_byte_buffer_write(&cb->commands, uint32_t, hndl.id);
     });
 }
 
-void gs_graphics_renderpass_end(gs_command_buffer_t* cb)
+GS_API_DECL void 
+gs_graphics_renderpass_end(gs_command_buffer_t* cb)
 {
     __ogl_push_command(cb, GS_OPENGL_OP_END_RENDER_PASS, {
         // Nothing...
     });
 }
 
-void gs_graphics_clear(gs_command_buffer_t* cb, gs_graphics_clear_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_clear(gs_command_buffer_t* cb, gs_graphics_clear_desc_t* desc)
 {
     __ogl_push_command(cb, GS_OPENGL_OP_CLEAR, {
         uint32_t count = !desc->actions ? 0 : !desc->size ? 1 : (uint32_t)((size_t)desc->size / (size_t)sizeof(gs_graphics_clear_action_t));
@@ -1399,7 +1400,8 @@ void gs_graphics_clear(gs_command_buffer_t* cb, gs_graphics_clear_desc_t* desc)
     });
 }
 
-void gs_graphics_set_viewport(gs_command_buffer_t* cb, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+GS_API_DECL void 
+gs_graphics_set_viewport(gs_command_buffer_t* cb, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
 {
     __ogl_push_command(cb, GS_OPENGL_OP_SET_VIEWPORT, {
         gs_byte_buffer_write(&cb->commands, uint32_t, x);
@@ -1409,7 +1411,8 @@ void gs_graphics_set_viewport(gs_command_buffer_t* cb, uint32_t x, uint32_t y, u
     });
 }
 
-void gs_graphics_set_view_scissor(gs_command_buffer_t* cb, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+GS_API_DECL void 
+gs_graphics_set_view_scissor(gs_command_buffer_t* cb, uint32_t x, uint32_t y, uint32_t w, uint32_t h)
 { 
     __ogl_push_command(cb, GS_OPENGL_OP_SET_VIEW_SCISSOR, {
         gs_byte_buffer_write(&cb->commands, uint32_t, x);
@@ -1419,7 +1422,8 @@ void gs_graphics_set_view_scissor(gs_command_buffer_t* cb, uint32_t x, uint32_t 
     }); 
 }
 
-void gs_graphics_texture_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_texture_t) hndl, gs_graphics_texture_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_texture_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_texture_t) hndl, gs_graphics_texture_desc_t* desc)
 {
     // Write command
     gs_byte_buffer_write(&cb->commands, uint32_t, (uint32_t)GS_OPENGL_OP_REQUEST_TEXTURE_UPDATE);
@@ -1451,7 +1455,7 @@ void gs_graphics_texture_request_update(gs_command_buffer_t* cb, gs_handle(gs_gr
     gs_byte_buffer_write(&cb->commands, uint32_t, hndl.id);
     gs_byte_buffer_write(&cb->commands, gs_graphics_texture_desc_t, *desc);
     gs_byte_buffer_write(&cb->commands, size_t, total_size);
-    gs_byte_buffer_write_bulk(&cb->commands, desc->data, total_size);
+    gs_byte_buffer_write_bulk(&cb->commands, *desc->data, total_size);
 }
 
 void __gs_graphics_update_buffer_internal(gs_command_buffer_t* cb, 
@@ -1483,7 +1487,8 @@ void __gs_graphics_update_buffer_internal(gs_command_buffer_t* cb,
     gs_byte_buffer_write_bulk(&cb->commands, data, sz);
 }
 
-void gs_graphics_vertex_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_vertex_buffer_t) hndl, gs_graphics_vertex_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_vertex_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_vertex_buffer_t) hndl, gs_graphics_vertex_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
@@ -1493,7 +1498,8 @@ void gs_graphics_vertex_buffer_request_update(gs_command_buffer_t* cb, gs_handle
     __gs_graphics_update_buffer_internal(cb, hndl.id, GS_GRAPHICS_BUFFER_VERTEX, desc->usage, desc->size, desc->update.offset, desc->update.type, desc->data);
 }
 
-void gs_graphics_index_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_index_buffer_t) hndl, gs_graphics_index_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_index_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_index_buffer_t) hndl, gs_graphics_index_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
@@ -1503,7 +1509,8 @@ void gs_graphics_index_buffer_request_update(gs_command_buffer_t* cb, gs_handle(
     __gs_graphics_update_buffer_internal(cb, hndl.id, GS_GRAPHICS_BUFFER_INDEX, desc->usage, desc->size, desc->update.offset, desc->update.type, desc->data);
 }
 
-void gs_graphics_uniform_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_uniform_buffer_t) hndl, gs_graphics_uniform_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_uniform_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_uniform_buffer_t) hndl, gs_graphics_uniform_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
@@ -1513,12 +1520,15 @@ void gs_graphics_uniform_buffer_request_update(gs_command_buffer_t* cb, gs_handl
     __gs_graphics_update_buffer_internal(cb, hndl.id, GS_GRAPHICS_BUFFER_UNIFORM, desc->usage, desc->size, desc->update.offset, desc->update.type, desc->data);
 }
 
-void gs_graphics_storage_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_storage_buffer_t) hndl, gs_graphics_storage_buffer_desc_t* desc)
+GS_API_DECL void 
+gs_graphics_storage_buffer_request_update(gs_command_buffer_t* cb, gs_handle(gs_graphics_storage_buffer_t) hndl, gs_graphics_storage_buffer_desc_t* desc)
 {
     gsgl_data_t* ogl = (gsgl_data_t*)gs_subsystem(graphics)->user_data;
 
     // Return if handle not valid
     if (!hndl.id) return;
+
+    __gs_graphics_update_buffer_internal(cb, hndl.id, GS_GRAPHICS_BUFFER_SHADER_STORAGE, desc->usage, desc->size, desc->update.offset, desc->update.type, desc->data);
 }
 
 void gs_graphics_apply_bindings(gs_command_buffer_t* cb, gs_graphics_bind_desc_t* binds)
@@ -1645,7 +1655,7 @@ void gs_graphics_dispatch_compute(gs_command_buffer_t* cb, uint32_t num_x_groups
 }
 
 /* Submission (Main Thread) */
-void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
+void gs_graphics_command_buffer_submit_impl(gs_command_buffer_t* cb)
 {
     /*
         // Structure of command: 
@@ -1748,6 +1758,7 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                     }
                     if (action.flag & GS_GRAPHICS_CLEAR_STENCIL || action.flag == 0x00) {
                         bit |= GL_STENCIL_BUFFER_BIT;
+                        glStencilMask(~0);
                     }
 
                     glClear(bit);
@@ -1801,11 +1812,12 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                             if (!id || !gs_slot_array_exists(ogl->vertex_buffers, id)) 
                             {
-                                gs_timed_action(60, 
-                                {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Opengl:BindBindings:VertexBuffer %d does not exist.", id);
                                     continue;
                                 });
+                                */
                             }
 
                             // Grab vbo to bind
@@ -1828,10 +1840,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                             if (!gs_slot_array_exists(ogl->index_buffers, id)) 
                             {
-                                gs_timed_action(60, 
-                                {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Opengl:BindBindings:IndexBuffer %d does not exist.", id);
                                 });
+                                */
                             } 
                             else 
                             {
@@ -1853,18 +1866,22 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                             // Check buffer id. If invalid, then we can't operate, and instead just need to pass over the data.
                             if (!id || !gs_slot_array_exists(ogl->uniforms, id)) {
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Uniform:Uniform %d does not exist.", id);
                                 });
+                                */
                                 gs_byte_buffer_advance_position(&cb->commands, sz);
                                 continue;
                             }
 
                             // Grab currently bound pipeline (TODO(john): assert if this isn't valid)
                             if (!ogl->cache.pipeline.id || !gs_slot_array_exists(ogl->pipelines, ogl->cache.pipeline.id)){
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Uniform Buffer:Pipeline %d does not exist.", ogl->cache.pipeline.id);
                                 });
+                                */
                                 gs_byte_buffer_advance_position(&cb->commands, sz);
                                 continue;
                             }
@@ -1886,9 +1903,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                                 if ((u->location == UINT32_MAX && u->location != UINT32_MAX - 1) || u->sid != pip->raster.shader.id) 
                                 {
                                     if (!sid || !gs_slot_array_exists(ogl->shaders, sid)) {
-                                        gs_timed_action(60, {
+                                        /*
+                                        gs_timed_action(1000, {
                                             gs_println("Warning:Bind Uniform:Shader %d does not exist.", sid);
                                         });
+                                        */
 
                                         // Advance by size of uniform
                                         gs_byte_buffer_advance_position(&cb->commands, sz);
@@ -1899,7 +1918,7 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                                     // Construct temp name, concat with base name + uniform field name
                                     char name[256] = gs_default_val();
-                                    memcpy(name, ul->name, 256);
+                                    memcpy(name, ul->name, 64);
                                     if (u->name)
                                     {
                                         gs_snprintfc(UTMP, 256, "%s%s", ul->name, u->name);
@@ -2056,17 +2075,21 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                             // Check buffer id. If invalid, then we can't operate, and instead just need to pass over the data.
                             if (!id || !gs_slot_array_exists(ogl->uniform_buffers, id)) {
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Uniform Buffer:Uniform %d does not exist.", id);
                                 });
+                                */
                                 continue;
                             }
 
                             // Grab currently bound pipeline (TODO(john): assert if this isn't valid)
                             if (!ogl->cache.pipeline.id || !gs_slot_array_exists(ogl->pipelines, ogl->cache.pipeline.id)){
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Uniform Buffer:Pipeline %d does not exist.", ogl->cache.pipeline.id);
                                 });
+                                */
                                 continue;
                             }
 
@@ -2084,9 +2107,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                             if ((u->location == UINT32_MAX && u->location != UINT32_MAX - 1) || u->sid != pip->raster.shader.id) 
                             {
                                 if (!sid || !gs_slot_array_exists(ogl->shaders, sid)) {
-                                    gs_timed_action(60, {
+                                    /*
+                                    gs_timed_action(1000, {
                                         gs_println("Warning:Bind Uniform Buffer:Shader %d does not exist.", sid);
                                     });
+                                    */
                                     continue;
                                 }
 
@@ -2117,17 +2142,21 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                             // Grab storage buffer from id
                             if (!sb_slot_id || !gs_slot_array_exists(ogl->storage_buffers, sb_slot_id)) {
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Storage Buffer:Storage Buffer %d does not exist.", sb_slot_id);
                                 });
+                                */
                                 continue;
                             }
 
                             // Grab currently bound pipeline (TODO(john): assert if this isn't valid)
                             if (!ogl->cache.pipeline.id || !gs_slot_array_exists(ogl->pipelines, ogl->cache.pipeline.id)){
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Storage Buffer:Pipeline %d does not exist or is not bound.", ogl->cache.pipeline.id);
                                 });
+                                */
                                 continue;
                             }
 
@@ -2139,9 +2168,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                             uint32_t sid = pip->compute.shader.id ? pip->compute.shader.id : pip->raster.shader.id;
 
                             if (!sid || !gs_slot_array_exists(ogl->shaders, sid)) {
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Uniform Buffer:Shader %d does not exist.", sid);
                                 });
+                                */
                                 continue;
                             }
 
@@ -2189,9 +2220,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                             // Grab texture from sampler id
                             if (!tex_slot_id || !gs_slot_array_exists(ogl->textures, tex_slot_id)) {
-                                gs_timed_action(60, {
+                                /*
+                                gs_timed_action(1000, {
                                     gs_println("Warning:Bind Image Buffer:Texture %d does not exist.", tex_slot_id);
                                 });
+                                */
                                 continue;
                             }
 
@@ -2216,7 +2249,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                 // Make sure pipeline exists
                 if (!pipid || !gs_slot_array_exists(ogl->pipelines, pipid)) {
-                    gs_println("Warning: Pipeline %d does not exist.", pipid);
+                    /*
+                    gs_timed_action(1000, { 
+                        gs_println("Warning: Pipeline %d does not exist.", pipid);
+                    });
+                    */
                     continue;
                 }
                 
@@ -2240,9 +2277,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                         glUseProgram(gs_slot_array_get(ogl->shaders, pip->compute.shader.id));
                     } 
                     else {
-                        gs_timed_action(60, {
+                        /*
+                        gs_timed_action(1000, {
                             gs_println("Warning:Opengl:BindPipeline:Compute:Shader %d does not exist.", pip->compute.shader.id);
                         });
+                        */
                     }
 
                     continue;
@@ -2300,9 +2339,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                     glUseProgram(gs_slot_array_get(ogl->shaders, pip->raster.shader.id));
                 } 
                 else {
-                    gs_timed_action(60, {
+                    /*
+                    gs_timed_action(1000, {
                         gs_println("Warning:Opengl:BindPipeline:Shader %d does not exist.", pip->raster.shader.id);
                     });
+                    */
                 }
             } break;
 
@@ -2314,9 +2355,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                 // Grab currently bound pipeline (TODO(john): assert if this isn't valid)
                 if (ogl->cache.pipeline.id == 0 || !gs_slot_array_exists(ogl->pipelines, ogl->cache.pipeline.id)) {
-                    gs_timed_action(60, {
+                    /*
+                    gs_timed_action(1000, {
                         gs_println("Warning:Opengl:DispatchCompute:Compute Pipeline not bound.");
                     });
+                    */
                     continue;
                 }
 
@@ -2324,9 +2367,11 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                 // If pipeline does not have a compute state bound, then leave
                 if (!pip->compute.shader.id) {
-                    gs_timed_action(60, {
+                    /*
+                    gs_timed_action(1000, {
                         gs_println("Warning:Opengl:DispatchCompute:Compute Pipeline not bound.");
                     });
+                    */
                     continue;
                 }
 
@@ -2345,8 +2390,10 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                 // Must have a vertex buffer bound to draw
                 if (gs_dyn_array_empty(ogl->cache.vdecls)) {
-                    gs_println("Error:Opengl:Draw: No vertex buffer bound.");
-                    gs_assert(false);
+                    gs_timed_action(1000, { 
+                        gs_println("Error:Opengl:Draw: No vertex buffer bound.");
+                    });
+                    // gs_assert(false);
                 }
 
                 // Keep track whether or not the data is to be instanced
@@ -2355,7 +2402,7 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
                 for (uint32_t i = 0; i < gs_dyn_array_size(pip->layout); ++i)
                 {
                     // Vertex buffer to bind
-                    uint32_t vbo_idx = pip->layout[i].buffer_idx;
+                    uint32_t vbo_idx = i; //pip->layout[i].buffer_idx;
                     gsgl_vertex_buffer_decl_t vdecl = vbo_idx < gs_dyn_array_size(ogl->cache.vdecls) ? ogl->cache.vdecls[vbo_idx] : ogl->cache.vdecls[0];
                     gsgl_buffer_t vbo = vdecl.vbo;
 
@@ -2546,6 +2593,23 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
 
                         glBindBuffer(GL_UNIFORM_BUFFER, 0);
                     } break;
+
+                    case GS_GRAPHICS_BUFFER_SHADER_STORAGE:
+                    {
+                        gs_graphics_storage_buffer_desc_t desc = {
+                            .data = cb->commands.data + cb->commands.position,
+                            .size = sz,
+                            .usage = usage,
+                            .update = {
+                                .type = update_type,
+                                .offset = offset,
+                            },
+                        };
+                        gs_handle(gs_graphics_storage_buffer_t) hndl;
+                        hndl.id = id;
+                        gs_graphics_storage_buffer_update(hndl, &desc);
+
+                    } break;
                 }
 
                 // Advance past data
@@ -2568,6 +2632,103 @@ void gs_graphics_command_buffer_submit(gs_command_buffer_t* cb)
     // Set num commands to 0
     cb->num_commands = 0;
 }
+
+GS_API_DECL void 
+gs_graphics_init(gs_graphics_t* graphics)
+{
+    // Push back 0 handles into slot arrays (for 0 init validation)
+    gsgl_data_t* ogl = (gsgl_data_t*)graphics->user_data;
+
+    gs_slot_array_insert(ogl->shaders, 0);  
+    gs_slot_array_insert(ogl->vertex_buffers, 0);   
+    gs_slot_array_insert(ogl->index_buffers, 0);    
+    gs_slot_array_insert(ogl->frame_buffers, 0);    
+
+    gsgl_uniform_list_t ul = gs_default_val();
+    gsgl_uniform_buffer_t ub = gs_default_val();
+    gsgl_pipeline_t pip = gs_default_val();
+    gsgl_renderpass_t rp = gs_default_val();
+    gsgl_texture_t tex = gs_default_val();
+    gsgl_storage_buffer_t sb = gs_default_val();
+
+    gs_slot_array_insert(ogl->uniforms, ul);
+    gs_slot_array_insert(ogl->pipelines, pip);
+    gs_slot_array_insert(ogl->renderpasses, rp);
+    gs_slot_array_insert(ogl->uniform_buffers, ub);
+    gs_slot_array_insert(ogl->textures, tex);
+    gs_slot_array_insert(ogl->storage_buffers, sb);
+
+    // Construct vao then bind
+    glGenVertexArrays(1, &ogl->cache.vao);      
+    glBindVertexArray(ogl->cache.vao);
+
+    // Reset data cache for rendering ops
+    gsgl_reset_data_cache(&ogl->cache);
+
+    // Init info object
+    gs_graphics_info_t* info = &gs_subsystem(graphics)->info;
+
+    // Major/Minor version
+    glGetIntegerv(GL_MAJOR_VERSION, (GLint*)&info->major_version);
+    glGetIntegerv(GL_MINOR_VERSION, (GLint*)&info->minor_version);
+
+    // Max texture units
+    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, (GLint*)&info->max_texture_units);
+
+    // Compute shader info
+    CHECK_GL_CORE(
+        info->compute.available = info->major_version >= 4 && info->minor_version >= 3;
+        if (info->compute.available)
+        {
+            // Work group counts
+            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, (int32_t*)&info->compute.max_work_group_count[0]);
+            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, (int32_t*)&info->compute.max_work_group_count[1]);
+            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, (int32_t*)&info->compute.max_work_group_count[2]);
+            // Work group sizes
+            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, (int32_t*)&info->compute.max_work_group_size[0]);
+            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, (int32_t*)&info->compute.max_work_group_size[1]);
+            glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, (int32_t*)&info->compute.max_work_group_size[2]);
+            // Work group invocations
+            glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, (int32_t*)&info->compute.max_work_group_invocations);
+        }
+    )
+
+    // Set up all function pointers for graphics context
+
+    // Create
+    graphics->api.texture_create = gs_graphics_texture_create_impl;
+    graphics->api.uniform_create = gs_graphics_uniform_create_impl;
+    graphics->api.shader_create = gs_graphics_shader_create_impl;
+    graphics->api.vertex_buffer_create = gs_graphics_vertex_buffer_create_impl;
+    graphics->api.index_buffer_create = gs_graphics_index_buffer_create_impl;
+    graphics->api.uniform_buffer_create = gs_graphics_uniform_buffer_create_impl;
+    graphics->api.storage_buffer_create = gs_graphics_storage_buffer_create_impl;
+    graphics->api.framebuffer_create = gs_graphics_framebuffer_create_impl;
+    graphics->api.renderpass_create = gs_graphics_renderpass_create_impl;
+    graphics->api.pipeline_create = gs_graphics_pipeline_create_impl; 
+
+    // Destroy
+    graphics->api.texture_destroy = gs_graphics_texture_destroy_impl; 
+    graphics->api.uniform_destroy = gs_graphics_uniform_destroy_impl;
+    graphics->api.shader_destroy = gs_graphics_shader_destroy_impl;
+    graphics->api.vertex_buffer_destroy = gs_graphics_vertex_buffer_destroy_impl;
+    graphics->api.index_buffer_destroy = gs_graphics_index_buffer_destroy_impl;
+    graphics->api.uniform_buffer_destroy = gs_graphics_uniform_buffer_destroy_impl;
+    graphics->api.storage_buffer_destroy = gs_graphics_storage_buffer_destroy_impl;
+    graphics->api.framebuffer_destroy = gs_graphics_framebuffer_destroy_impl;
+    graphics->api.renderpass_destroy = gs_graphics_renderpass_destroy_impl;
+    graphics->api.pipeline_destroy = gs_graphics_pipeline_destroy_impl; 
+
+    // Resource Updates (main thread only) 
+    graphics->api.vertex_buffer_update = gs_graphics_vertex_buffer_update_impl; 
+    graphics->api.index_buffer_update = gs_graphics_index_buffer_update_impl;
+    graphics->api.storage_buffer_update = gs_graphics_storage_buffer_update_impl;
+    graphics->api.texture_update = gs_graphics_texture_update_impl;
+
+    // Submission (Main Thread)
+    graphics->api.command_buffer_submit = gs_graphics_command_buffer_submit_impl;
+}
+
 
 #endif // GS_GRAPHICS_IMPL_OPENGL
 #endif // GS_GRAPHICS_IMPL_H

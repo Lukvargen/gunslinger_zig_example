@@ -1,5 +1,7 @@
+// c.zig for auto translated,  zig_gs.zig for pretranslated gs headers
 //const c = @import("c.zig");
-const c =  @import("zig_gs.zig");
+const c = @import("zig_gs.zig");
+
 const std = @import("std");
 const zeroInit = std.mem.zeroInit;
 
@@ -22,7 +24,8 @@ var vbo : c.gs_handle_gs_graphics_vertex_buffer_t = std.mem.zeroes(c.gs_handle_g
 var pip : c.gs_handle_gs_graphics_pipeline_t = std.mem.zeroes(c.gs_handle_gs_graphics_pipeline_t);
 var shader : c.gs_handle_gs_graphics_shader_t = std.mem.zeroes(c.gs_handle_gs_graphics_shader_t);
 var u_time : c.gs_handle_gs_graphics_uniform_t = undefined;
-//var gui = std.mem.zeroes(c.gs_gui_context_t);
+var gui :c.gs_gui_context_t = undefined;
+var gui_demo_open = true;
 
 const v_src = 
     \\#version 330 core
@@ -45,27 +48,56 @@ const f_src =
 ;
 
 var v_data = [_]f32{
-    0.0, 0.5,
-    -0.5, -0.5, 
+    0.0,  0.5,
+   -0.5, -0.5, 
     0.5, -0.5
 };
 
-pub fn app_init() callconv(.C) void
-{
+pub fn main() !void {
     
+    var app = std.mem.zeroes(c.gs_app_desc_t);
+    app.window = zeroInit(c.gs_platform_window_desc_t, .{
+        .width = 800,
+        .height = 800,
+        .vsync = 1,
+        .title = "Gunslinger | Zig",
+    });
+    app.init = app_init;
+    app.update = app_update;
+    app.shutdown = app_shutdown;
+
+     _ = c.gs_create(app);
+    std.debug.print("gs app created: {}\n", .{app});
+
+    while (c.gs_app().*.is_running != 0) {
+        c.gs_frame();
+    }
 }
 
-
-pub fn app_update() callconv(.C) void
+pub fn app_init(...) callconv(.C) void
 {
+    cb = c.gs_command_buffer_new();
+	gsi = c.gs_immediate_draw_new(c.gs_platform_main_window());
+    gui = c.gs_gui_new(c.gs_platform_main_window());
+    
+    triangle_setup();
+}
+
+pub fn app_update(...) callconv(.C) void
+{
+    if (c.gs_platform_key_pressed(c.GS_KEYCODE_ESC)) {
+        c.gs_quit();
+    }
+
     var delta = c.gs_platform_delta_time();
     time += delta;
     
     const fbs = c.gs_platform_framebuffer_sizev(c.gs_platform_main_window());
 
+    // the translated gs vector structs doesnt work that well due to anonymous union
     const fbsu32 = Vec2u32 {
-        .x = @floatToInt(u32, fbs.xy[0]),
-        .y = @floatToInt(u32, fbs.xy[1]),
+        .x = @floatToInt(u32, fbs.unnamed_0.xy[0]),
+        .y = @floatToInt(u32, fbs.unnamed_0.xy[1]),
     };
 
     c.gsi_depth_enabled(&gsi, true);
@@ -101,43 +133,32 @@ pub fn app_update() callconv(.C) void
         }
     });
 
+    var hints = zeroInit(c.gs_gui_hints_t, .{
+        .framebuffer_size = fbs,
+        .viewport = .{.x = 0.0, .y = 0.0, .w = @intToFloat(f32, fbsu32.x), .h = @intToFloat(f32, fbsu32.y)}
+    });
+    c.gs_gui_begin(&gui, &hints); 
+        _ = c.gs_gui_demo_window(&gui, .{.x = 50.0, .y = 50.0, .w = 200.0, .h= 400.0}, &gui_demo_open);
+    c.gs_gui_end(&gui);
+
     c.gs_graphics_renderpass_begin(&cb, c.GS_GRAPHICS_RENDER_PASS_DEFAULT);
         c.gs_graphics_set_viewport(&cb, 0, 0, fbsu32.x, fbsu32.y);
         c.gs_graphics_clear(&cb, &clear);
         c.gsi_draw(&gsi, &cb);
 
         triangle_draw();
+        c.gs_gui_render(&gui, &cb);
     c.gs_graphics_renderpass_end(&cb);
         
-    c.gs_graphics_command_buffer_submit(&cb);
+    // workaround for gs_graphics_command_buffer_submit(CB),
+    // zig translate-c unable to translate correctly
+    var api = c.gs_graphics().*.api;
+    api.command_buffer_submit.?(&cb);
 }
-pub fn app_shutdown() callconv(.C) void
+
+pub fn app_shutdown(...) callconv(.C) void
 {
     std.debug.print("shutdown\n", .{});
-}
-
-pub fn main() !void {
-    
-    var app = std.mem.zeroes(c.gs_app_desc_t);
-    app.window_title = "Gunslinger | Zig";
-    app.window_width = 800;
-    app.window_height = 800;
-    app.init = app_init;
-    app.update = app_update;
-    app.shutdown = app_shutdown;
-
-     _ = c.gs_create(app);
-    std.debug.print("gs app created: {}\n", .{app});
-
-    cb = c.gs_command_buffer_new();
-	gsi = c.gs_immediate_draw_new(c.gs_platform_main_window());
-    //c.gs_gui_init(&gui, c.gs_platform_main_window());
-    
-    triangle_setup();
-    
-    while (c.gs_app().*.is_running != 0) {
-        c.gs_frame();
-    }
 }
 
 fn triangle_setup() void {
@@ -188,6 +209,7 @@ fn triangle_setup() void {
             }),
         })
     );
+    
 }
 
 fn triangle_draw() void {
@@ -212,7 +234,6 @@ fn triangle_draw() void {
     c.gs_graphics_apply_bindings(&cb, &binds);
     c.gs_graphics_draw(&cb, &draw_desc);
 }
-
 
 
 fn string_to_char64_null_term(comptime format : []const u8, args: anytype) [64]u8 {

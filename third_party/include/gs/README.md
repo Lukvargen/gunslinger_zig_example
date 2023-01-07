@@ -1,6 +1,5 @@
 ![gunslinger](https://raw.githubusercontent.com/MrFrenik/gunslinger/master/docs/gs_logo2.png)
 ![GitHub](https://img.shields.io/github/license/mrfrenik/gunslinger)
-[![Discord](https://img.shields.io/discord/485178488203116567?label=discord&logo=discord)](https://discord.gg/QXwpETB)
 ![GitHub top language](https://img.shields.io/github/languages/top/mrfrenik/gunslinger?label=c99)
 [![CI](https://github.com/MrFrenik/gunslinger/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/MrFrenik/gunslinger/actions/workflows/ci.yml)
 
@@ -47,6 +46,11 @@ gs_app_desc_t gs_main(int32_t argc, char** argv)
    return (gs_app_desc_t){0};
 }
 ```
+## Projects using GS
+
+### Drop Down Terminal Util
+https://github.com/Samdal/gs_ddt_ex
+
 ## Roadmap
 
 * Support iOS/RPI/UWP backends

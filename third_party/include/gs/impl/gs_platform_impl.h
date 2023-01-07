@@ -26,6 +26,7 @@
 #if !(defined GS_PLATFORM_WIN)
     #include <sys/stat.h>
     #include <dirent.h>
+    #include <dlfcn.h>  // dlopen, RTLD_LAZY, dlsym
 #else
 	#include "../external/dirent/dirent.h"
     #include <direct.h>
@@ -33,13 +34,14 @@
 
 /*== Platform Window ==*/
 
-gs_platform_t* gs_platform_create()
+GS_API_DECL gs_platform_t* 
+gs_platform_create()
 {
     // Construct new platform interface
     gs_platform_t* platform = gs_malloc_init(gs_platform_t);
 
     // Initialize windows
-    platform->windows = gs_slot_array_new(void*);
+    platform->windows = gs_slot_array_new(gs_platform_window_t);
 
     // Set up video mode (for now, just do opengl)
     platform->settings.video.driver = GS_PLATFORM_VIDEO_DRIVER_TYPE_OPENGL;
@@ -47,7 +49,8 @@ gs_platform_t* gs_platform_create()
     return platform;
 }
 
-void gs_platform_destroy(gs_platform_t* platform)
+GS_API_DECL void 
+gs_platform_destroy(gs_platform_t* platform)
 {
     if (platform == NULL) return;
 
@@ -59,15 +62,19 @@ void gs_platform_destroy(gs_platform_t* platform)
     platform = NULL;
 }
 
-uint32_t gs_platform_create_window(const char* title, uint32_t width, uint32_t height, uint32_t monitor_index)
-{
+GS_API_DECL uint32_t 
+gs_platform_window_create(const gs_platform_window_desc_t* desc)
+{ 
     gs_assert(gs_instance() != NULL);
     gs_platform_t* platform = gs_subsystem(platform);
-    void* win = gs_platform_create_window_internal(title, width, height, monitor_index);
-    return (gs_slot_array_insert(platform->windows, win));
-}
+    gs_platform_window_t win = gs_platform_window_create_internal(desc); 
 
-uint32_t gs_platform_main_window()
+    // Insert and return handle
+    return (gs_slot_array_insert(platform->windows, win));
+} 
+
+GS_API_DECL uint32_t 
+gs_platform_main_window()
 {
     // Should be the first element of the slot array...Great assumption to make.
     return 0;
@@ -75,24 +82,28 @@ uint32_t gs_platform_main_window()
 
 /*== Platform Time ==*/
 
-GS_API_DECL const gs_platform_time_t* gs_platform_time()
+GS_API_DECL const 
+gs_platform_time_t* gs_platform_time()
 {
     return &gs_subsystem(platform)->time;
 }
 
-GS_API_DECL float gs_platform_delta_time()
+GS_API_DECL float 
+gs_platform_delta_time()
 {
     return gs_platform_time()->delta;
 }
 
-GS_API_DECL float gs_platform_frame_time()
+GS_API_DECL float 
+gs_platform_frame_time()
 {
     return gs_platform_time()->frame;
 }
 
 /*== Platform UUID ==*/
 
-GS_API_DECL struct gs_uuid_t gs_platform_uuid_generate()
+GS_API_DECL struct gs_uuid_t 
+gs_platform_uuid_generate()
 {
     gs_uuid_t uuid;
 
@@ -133,7 +144,8 @@ GS_API_DECL struct gs_uuid_t gs_platform_uuid_generate()
 }
 
 // Mutable temp buffer 'tmp_buffer'
-void gs_platform_uuid_to_string(char* tmp_buffer, const gs_uuid_t* uuid)
+GS_API_DECL void 
+gs_platform_uuid_to_string(char* tmp_buffer, const gs_uuid_t* uuid)
 {
     gs_snprintf 
     (
@@ -683,7 +695,7 @@ GS_API_DECL int32_t gs_platform_mkdir_default_impl(const char* dir_path, int32_t
 { 
     #ifdef __MINGW32__
         return mkdir(dir_path);
-    #elif defined __linux__
+    #elif (defined __linux__ || defined __APPLE__)
         return mkdir(dir_path, opt);
     #else
         return _mkdir(dir_path);
@@ -700,7 +712,6 @@ bool gs_platform_file_exists_default_impl(const char* file_path)
         path = tmp_path;
     #endif
 
-    gs_println("Checking: %s", path);
     FILE* fp = fopen(path, "r");
     if (fp) {
         fclose(fp);
@@ -751,6 +762,147 @@ void gs_platform_file_extension_default_impl(char* buffer, size_t buffer_sz, con
     gs_util_get_file_extension(buffer, buffer_sz, file_path);
 }
 
+GS_API_DECL int32_t    
+gs_platform_file_delete_default_impl(const char* file_path)
+{
+    #if (defined GS_PLATFORM_WIN)
+
+        // Non-zero if successful
+        return DeleteFile(file_path); 
+
+    #elif (defined GS_PLATFORM_LINUX || defined GS_PLATFORM_APPLE || defined GS_PLATFORM_ANDROID)
+
+        // Returns 0 if successful
+        return !remove(file_path);
+
+    #endif
+
+    return 0;
+}
+
+GS_API_DECL int32_t    
+gs_platform_file_copy_default_impl(const char* src_path, const char* dst_path)
+{
+    #if (defined GS_PLATFORM_WIN)
+
+        return CopyFile(src_path, dst_path, false);
+
+    #elif (defined GS_PLATFORM_LINUX || defined GS_PLATFORM_APPLE || defined GS_PLATFORM_ANDROID)
+
+        FILE* file_w = NULL;
+        FILE* file_r = NULL;
+        char buffer[2048] = gs_default_val();
+
+        if ((file_w = fopen(src_path, "wb")) == NULL) {
+            return 0;
+        }
+        if ((file_r = fopen(dst_path, "rb")) == NULL) {
+            return 0;
+        }
+
+        // Read file in 2kb chunks to write to location
+        int32_t len = 0;
+        while ((len = fread(buffer, sizeof(buffer), 1, file_r)) > 0) {
+            fwrite(buffer, len, 1, file_w);
+        }
+
+        // Close both files
+        fclose(file_r);
+        fclose(file_w);
+
+    #endif
+
+    return 0;
+}
+
+GS_API_DECL int32_t    
+gs_platform_file_compare_time(uint64_t time_a, uint64_t time_b)
+{ 
+    return time_a < time_b ? -1 : time_a == time_b ? 0 : 1; 
+}
+
+GS_API_DECL gs_platform_file_stats_t 
+gs_platform_file_stats(const char* file_path)
+{
+    gs_platform_file_stats_t stats = gs_default_val();
+
+    #if (defined GS_PLATFORM_WIN) 
+        
+        WIN32_FILE_ATTRIBUTE_DATA data = gs_default_val();
+        FILETIME ftime = gs_default_val();
+        FILETIME ctime = gs_default_val();
+        FILETIME atime = gs_default_val();
+        if (GetFileAttributesExA(file_path, GetFileExInfoStandard, &data))
+        {
+            ftime = data.ftLastWriteTime;
+            ctime = data.ftCreationTime;
+            atime = data.ftLastAccessTime;
+        }
+
+        stats.modified_time = *((uint64_t*)&ftime);
+        stats.access_time = *((uint64_t*)&atime);
+        stats.creation_time = *((uint64_t*)&ctime);
+
+    #elif (defined GS_PLATFORM_LINUX || defined GS_PLATFORM_APPLE || defined GS_PLATFORM_ANDROID)
+        struct stat attr = gs_default_val();
+        stat(file_path, &attr); 
+        stats.modified_time = *((uint64_t*)&attr.st_mtime);
+
+    #endif
+
+    return stats;
+}
+
+GS_API_DECL void*      
+gs_platform_library_load_default_impl(const char* lib_path)
+{
+    #if (defined GS_PLATFORM_WIN) 
+
+        return (void*)LoadLibraryA(lib_path);
+
+    #elif (defined GS_PLATFORM_LINUX || defined GS_PLATFORM_APPLE || defined GS_PLATFORM_ANDROID)
+
+        return (void*)dlopen(lib_path, RTLD_LAZY);
+
+    #endif
+
+    return NULL;
+}
+
+GS_API_DECL void       
+gs_platform_library_unload_default_impl(void* lib)
+{
+    if (!lib) return;
+
+    #if (defined GS_PLATFORM_WIN) 
+        
+        FreeLibrary((HMODULE)lib);
+
+    #elif (defined GS_PLATFORM_LINUX || defined GS_PLATFORM_APPLE || defined GS_PLATFORM_ANDROID)
+
+        dlclose(lib);
+
+    #endif
+}
+
+GS_API_DECL void*      
+gs_platform_library_proc_address_default_impl(void* lib, const char* func)
+{
+    if (!lib) return NULL;
+
+    #if (defined GS_PLATFORM_WIN) 
+
+        return (void*)GetProcAddress((HMODULE)lib, func);
+
+    #elif (defined GS_PLATFORM_LINUX || defined GS_PLATFORM_APPLE || defined GS_PLATFORM_ANDROID)
+
+        return (void*)dlsym(lib, func);
+
+    #endif
+
+    return NULL;
+}
+
 #undef GS_PLATFORM_IMPL_DEFAULT
 #endif // GS_PLATFORM_IMPL_DEFAULT
 
@@ -788,8 +940,10 @@ void __glfw_mouse_cursor_enter_callback(GLFWwindow* window, s32 entered);
 void __glfw_frame_buffer_size_callback(GLFWwindow* window, s32 width, s32 height);
 void __glfw_drop_callback(GLFWwindow* window);
 
+/*
 #define __glfw_window_from_handle(platform, handle)\
     ((GLFWwindow*)(gs_slot_array_get((platform)->windows, (handle))))
+*/
 
 /*== Platform Init / Shutdown == */
 
@@ -860,7 +1014,28 @@ void gs_platform_init(gs_platform_t* pf)
 
 GS_API_DECL void gs_platform_update_internal(gs_platform_t* platform)
 { 
-    gs_platform_input_t* input = &platform->input;
+    gs_platform_input_t* input = &platform->input; 
+
+    // Platform time
+    platform->time.elapsed = (glfwGetTime() * 1000.0);
+
+    // Update all window/framebuffer state
+    for (
+        gs_slot_array_iter it = gs_slot_array_iter_new(platform->windows); 
+        gs_slot_array_iter_valid(platform->windows, it); 
+        gs_slot_array_iter_advance(platform->windows, it)
+    )
+    {
+        // Cache all necessary window information 
+		int32_t wx = 0, wy = 0, fx = 0, fy = 0, wpx = 0, wpy = 0;
+        gs_platform_window_t* win = gs_slot_array_getp(platform->windows, it); 
+        glfwGetWindowSize((GLFWwindow*)win->hndl, &wx, &wy);
+        glfwGetFramebufferSize((GLFWwindow*)win->hndl, &fx, &fy);
+        glfwGetWindowPos((GLFWwindow*)win->hndl, &wpx, &wpy);
+		win->window_size = gs_v2( (float)wx, (float)wy);
+		win->window_position = gs_v2( (float)wpx, (float)wpy);
+		win->framebuffer_size = gs_v2( (float)fx, (float)fy);
+    }
 
     // Update all gamepad state
     for (uint32_t i = 0; i < GS_PLATFORM_GAMEPAD_MAX; ++i) {
@@ -899,7 +1074,7 @@ void gs_platform_shutdown(gs_platform_t* pf)
         gs_slot_array_iter_advance(pf->windows, it)
     )
     {
-        GLFWwindow* win =  __glfw_window_from_handle(pf, it);
+        // GLFWwindow* win =  __glfw_window_from_handle(pf, it);
         // glfwDestroyWindow(win);
     }
 
@@ -1486,14 +1661,17 @@ void  gs_platform_sleep(float ms)
     #endif
 }
 
-double gs_platform_elapsed_time()
-{
-    return (glfwGetTime() * 1000.0);
+GS_API_DECL double 
+gs_platform_elapsed_time()
+{ 
+    gs_platform_t* platform = gs_subsystem(platform);
+    return platform->time.elapsed;
 }
 
 /*== Platform Video == */
 
-void  gs_platform_enable_vsync(int32_t enabled)
+GS_API_DECL void
+gs_platform_enable_vsync(int32_t enabled)
 {
     glfwSwapInterval(enabled ? 1 : 0);
 }
@@ -1510,13 +1688,28 @@ void GLAPIENTRY __gs_platform_gl_debug(GLenum source, GLenum type, GLuint id, GL
 
 /*== Platform Window == */
 
-void* gs_platform_create_window_internal(const char* title, uint32_t width, uint32_t height, uint32_t monitor_index)
+GS_API_DECL gs_platform_window_t 
+gs_platform_window_create_internal(const gs_platform_window_desc_t* desc)
 {
+    gs_platform_window_t win = gs_default_val();
+
+    if (!desc) 
+    {
+        // Log warning
+        gs_log_warning("Window descriptor is null.");
+        return win;
+    }
+
     // Grab window hints from application desc
-    u32 window_hints = gs_instance()->ctx.app.window_flags;
+    u32 window_hints = desc->flags;
 
     // Set whether or not the screen is resizable
     glfwWindowHint(GLFW_RESIZABLE, (window_hints & GS_WINDOW_FLAGS_NO_RESIZE) != GS_WINDOW_FLAGS_NO_RESIZE);
+
+    // Set multi-samples
+    if (desc->num_samples) {
+        glfwWindowHint(GLFW_SAMPLES, desc->num_samples); 
+    }
 
     // Get monitor if fullscreen
     GLFWmonitor* monitor = NULL;
@@ -1524,19 +1717,21 @@ void* gs_platform_create_window_internal(const char* title, uint32_t width, uint
     {
         int monitor_count;
         GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
-        if (monitor_index < monitor_count)
+        if (desc->monitor_index < monitor_count)
         {
-            monitor = monitors[monitor_index];
+            monitor = monitors[desc->monitor_index];
         }
     }
 
-    GLFWwindow* window = glfwCreateWindow(width, height, title, monitor, NULL);
+    GLFWwindow* window = glfwCreateWindow(desc->width, desc->height, desc->title, monitor, NULL);
     if (window == NULL)
     {
-        gs_println("Failed to create window.");
+        gs_log_error("Failed to create window.");
         glfwTerminate();
-        return NULL;
+        return win;
    }
+
+    win.hndl = window;
 
     // Callbacks for window
     glfwMakeContextCurrent(window);
@@ -1547,20 +1742,29 @@ void* gs_platform_create_window_internal(const char* title, uint32_t width, uint
     glfwSetCursorPosCallback(window, &__glfw_mouse_cursor_position_callback);
     glfwSetScrollCallback(window, &__glfw_mouse_scroll_wheel_callback);
 
+    // Cache all necessary window information 
+    int32_t wx = 0, wy = 0, fx = 0, fy = 0, wpx = 0, wpy = 0;
+    glfwGetWindowSize((GLFWwindow*)win.hndl, &wx, &wy);
+    glfwGetFramebufferSize((GLFWwindow*)win.hndl, &fx, &fy);
+    glfwGetWindowPos((GLFWwindow*)win.hndl, &wpx, &wpy);
+    win.window_size = gs_v2((float)wx, (float)wy);
+    win.window_position = gs_v2((float)wpx, (float)wpy);
+    win.framebuffer_size = gs_v2((float)fx, (float)fy);
+
     // Need to make sure this is ONLY done once.
     if (gs_slot_array_empty(gs_subsystem(platform)->windows))
     {
         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         {
-            gs_println("Failed to initialize GLFW.");
-            return NULL;
+            gs_log_warning("Failed to initialize GLFW.");
+            return win;
         }
 
         switch (gs_subsystem(platform)->settings.video.driver)
         {
             case GS_PLATFORM_VIDEO_DRIVER_TYPE_OPENGL: 
             {
-                gs_println("OpenGL Version: %s", glGetString(GL_VERSION));
+                gs_log_info("OpenGL Version: %s", glGetString(GL_VERSION));
                 if (gs_subsystem(platform)->settings.video.graphics.debug)
                 {
                     glDebugMessageCallback(__gs_platform_gl_debug, NULL);
@@ -1571,139 +1775,142 @@ void* gs_platform_create_window_internal(const char* title, uint32_t width, uint
         }
     }
 
-    return window;
+    return win;
 }
 
 // Platform callbacks
-GS_API_DECL void gs_platform_set_dropped_files_callback(uint32_t handle, gs_dropped_files_callback_t cb)
+GS_API_DECL void 
+gs_platform_set_dropped_files_callback(uint32_t handle, gs_dropped_files_callback_t cb)
 {
     gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSetDropCallback(win, (GLFWdropfun)cb);
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    glfwSetDropCallback((GLFWwindow*)win->hndl, (GLFWdropfun)cb);
 }
 
-GS_API_DECL void gs_platform_set_window_close_callback(uint32_t handle, gs_window_close_callback_t cb)
+GS_API_DECL void 
+gs_platform_set_window_close_callback(uint32_t handle, gs_window_close_callback_t cb)
 {
     gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSetWindowCloseCallback(win, (GLFWwindowclosefun)cb);
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    glfwSetWindowCloseCallback((GLFWwindow*)win->hndl, (GLFWwindowclosefun)cb);
 }
 
-GS_API_DECL void gs_platform_set_character_callback(uint32_t handle, gs_character_callback_t cb)
+GS_API_DECL void 
+gs_platform_set_character_callback(uint32_t handle, gs_character_callback_t cb)
 {
     gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSetCharCallback(win, (GLFWcharfun)cb);
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    glfwSetCharCallback((GLFWwindow*)win->hndl, (GLFWcharfun)cb);
 }
 
-GS_API_DECL void gs_platform_set_framebuffer_resize_callback(uint32_t handle, gs_framebuffer_resize_callback_t cb)
+GS_API_DECL void 
+gs_platform_set_framebuffer_resize_callback(uint32_t handle, gs_framebuffer_resize_callback_t cb)
 {
     gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSetFramebufferSizeCallback(win, (GLFWframebuffersizefun)cb);
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    glfwSetFramebufferSizeCallback((GLFWwindow*)win->hndl, (GLFWframebuffersizefun)cb);
 }
 
-void gs_platform_mouse_set_position(uint32_t handle, float x, float y)
+GS_API_DECL void 
+gs_platform_mouse_set_position(uint32_t handle, float x, float y)
 {
-    struct gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSetCursorPos(win, x, y);
+    gs_platform_t* platform = gs_subsystem(platform);
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    glfwSetCursorPos((GLFWwindow*)win->hndl, x, y);
 }
 
-void* gs_platform_raw_window_handle(uint32_t handle)
+GS_API_DECL void* 
+gs_platform_raw_window_handle(uint32_t handle)
 {
     // Grab instance of platform from engine
     gs_platform_t* platform = gs_subsystem(platform);
 
     // Grab window from handle
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    return (void*)win;
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    return (void*)win->hndl;
 }
 
-void gs_platform_window_swap_buffer(uint32_t handle)
+GS_API_DECL void 
+gs_platform_window_swap_buffer(uint32_t handle)
 {
     // Grab instance of platform from engine
     gs_platform_t* platform = gs_subsystem(platform);
 
     // Grab window from handle
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSwapBuffers(win);
+    gs_platform_window_t* win = gs_slot_array_getp(platform->windows, handle);
+    glfwSwapBuffers((GLFWwindow*)win->hndl);
 }
 
-gs_vec2 gs_platform_window_sizev(uint32_t handle)
+GS_API_DECL gs_vec2 
+gs_platform_window_sizev(uint32_t handle)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    int32_t w, h;
-    glfwGetWindowSize(win, &w, &h);
-    return gs_v2((float)w, (float)h);
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    return window->window_size;
 }
 
-void gs_platform_window_size(uint32_t handle, uint32_t* w, uint32_t* h)
+GS_API_DECL void 
+gs_platform_window_size(uint32_t handle, uint32_t* w, uint32_t* h)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_instance()->ctx.platform, handle);
-    glfwGetWindowSize(win, (int32_t*)w, (int32_t*)h);
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    *w = (int32_t)window->window_size.x;
+    *h = (int32_t)window->window_size.y;
 }
 
 uint32_t gs_platform_window_width(uint32_t handle)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_instance()->ctx.platform, handle);
-    int32_t w, h;
-    glfwGetWindowSize(win, &w, &h);
-    return w;
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    return (uint32_t)window->window_size.x;
 }
 
 uint32_t gs_platform_window_height(uint32_t handle)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_instance()->ctx.platform, handle);
-    int32_t w, h;
-    glfwGetWindowSize(win, &w, &h);
-    return h;
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    return (uint32_t)window->window_size.y;
 }
 
 bool32_t gs_platform_window_fullscreen(uint32_t handle)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    return glfwGetWindowMonitor(win) != NULL;
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    return glfwGetWindowMonitor((GLFWwindow*)window->hndl) != NULL;
 }
 
 void gs_platform_window_position(uint32_t handle, uint32_t* x, uint32_t* y)
-{
-    GLFWwindow* win = __glfw_window_from_handle(gs_instance()->ctx.platform, handle);
-    glfwGetWindowPos(win, (int32_t*)x, (int32_t*)y);
+{ 
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    *x = (uint32_t)window->window_position.x;
+    *y = (uint32_t)window->window_position.y;
 }
 
 gs_vec2 gs_platform_window_positionv(uint32_t handle)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    int32_t x, y;
-    glfwGetWindowPos(win, &x, &y);
-    return gs_v2((float)x, (float)y);
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    return window->window_position;
 }
 
 void gs_platform_set_window_size(uint32_t handle, uint32_t w, uint32_t h)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    glfwSetWindowSize(win, (int32_t)w, (int32_t)h);
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    glfwSetWindowSize((GLFWwindow*)window->hndl, (int32_t)w, (int32_t)h);
 }
 
 void gs_platform_set_window_sizev(uint32_t handle, gs_vec2 v)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    glfwSetWindowSize(win, (uint32_t)v.x, (uint32_t)v.y);
+    gs_platform_window_t* window = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    glfwSetWindowSize((GLFWwindow*)window->hndl, (uint32_t)v.x, (uint32_t)v.y);
 }
 
 void gs_platform_set_window_fullscreen(uint32_t handle, bool32_t fullscreen)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
+    gs_platform_window_t* win = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
     GLFWmonitor* monitor = NULL;
 
     int32_t x, y, w, h;
-    glfwGetWindowPos(win, &x, &y);
-    glfwGetWindowSize(win, &w, &h);
+    glfwGetWindowPos((GLFWwindow*)win->hndl, &x, &y);
+    glfwGetWindowSize((GLFWwindow*)win->hndl, &w, &h);
 
     if (fullscreen)
     {
-        uint32_t monitor_index = gs_instance()->ctx.app.monitor_index;
+        uint32_t monitor_index = gs_instance()->ctx.app.window.monitor_index;
         int monitor_count;
         GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
         if (monitor_index < monitor_count)
@@ -1712,25 +1919,26 @@ void gs_platform_set_window_fullscreen(uint32_t handle, bool32_t fullscreen)
         }
     }
 
-    glfwSetWindowMonitor(win, monitor, x, y, w, h, GLFW_DONT_CARE);
+    glfwSetWindowMonitor((GLFWwindow*)win->hndl, monitor, x, y, w, h, GLFW_DONT_CARE);
 }
 
 void gs_platform_set_window_position(uint32_t handle, uint32_t x, uint32_t y)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    glfwSetWindowPos(win, (int32_t)x, (int32_t)y);
+    gs_platform_window_t* win = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    glfwSetWindowPos((GLFWwindow*)win->hndl, (int32_t)x, (int32_t)y);
 }
 
 void gs_platform_set_window_positionv(uint32_t handle, gs_vec2 v)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    glfwSetWindowPos(win, (int32_t)v.x, (int32_t)v.y);
+    gs_platform_window_t* win = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    glfwSetWindowPos((GLFWwindow*)win->hndl, (int32_t)v.x, (int32_t)v.y);
 }
 
 void gs_platform_framebuffer_size(uint32_t handle, uint32_t* w, uint32_t* h)
 {
-    GLFWwindow* win = __glfw_window_from_handle(gs_subsystem(platform), handle);
-    glfwGetFramebufferSize(win, (int32_t*)w, (int32_t*)h);
+    gs_platform_window_t* win = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    *w = (uint32_t)win->framebuffer_size.x;
+    *h = (uint32_t)win->framebuffer_size.y;
 }
 
 gs_vec2 gs_platform_framebuffer_sizev(uint32_t handle)
@@ -1778,17 +1986,17 @@ GS_API_DECL gs_vec2 gs_platform_monitor_sizev(uint32_t id)
 void gs_platform_set_cursor(uint32_t handle, gs_platform_cursor cursor)
 {
     gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
+    gs_platform_window_t* win = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
     GLFWcursor* cp = ((GLFWcursor*)platform->cursors[(u32)cursor]); 
-    glfwSetCursor(win, cp);
+    glfwSetCursor((GLFWwindow*)win->hndl, cp);
 }
 
 void gs_platform_lock_mouse(uint32_t handle, bool32_t lock)
 {
     __gs_input()->mouse.locked = lock;
     gs_platform_t* platform = gs_subsystem(platform);
-    GLFWwindow* win = __glfw_window_from_handle(platform, handle);
-    glfwSetInputMode(win, GLFW_CURSOR, lock ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    gs_platform_window_t* win = gs_slot_array_getp(gs_subsystem(platform)->windows, handle);
+    glfwSetInputMode((GLFWwindow*)win->hndl, GLFW_CURSOR, lock ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
 
     // Not sure if I want to support this or not
     // if (glfwRawMouseMotionSupported()) {
@@ -2422,11 +2630,12 @@ gs_platform_mouse_set_position(uint32_t handle, float x, float y)
     platform->input.mouse.position = gs_v2(x, y);
 }
 
-GS_API_DECL void*    
-gs_platform_create_window_internal(const char* title, uint32_t width, uint32_t height, uint32_t monitor_index)
+GS_API_DECL gs_platform_window_t    
+gs_platform_window_create_internal(const gs_platform_window_desc_t* desc)
 {
     // Nothing for now, since we just create this internally...
-    return NULL;
+    gs_platform_window_t win = gs_default_val();
+    return win;
 }
 
 GS_API_DECL void     
@@ -3395,10 +3604,12 @@ gs_platform_lock_mouse(uint32_t handle, bool32_t lock)
 {
 }
 
-GS_API_DECL void*    
-gs_platform_create_window_internal(const char* title, uint32_t width, uint32_t height, uint32_t monitor_index)
+GS_API_DECL gs_platform_window_t    
+gs_platform_window_create_internal(const gs_platform_window_desc_t* desc)
 {
-    return NULL;
+    // Nothing for now, since we just create this internally...
+    gs_platform_window_t win = gs_default_val();
+    return win;
 }
 
 GS_API_DECL void     

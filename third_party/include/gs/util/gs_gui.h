@@ -780,6 +780,7 @@ typedef struct gs_gui_context_t
 	int32_t updated_focus;
 	int32_t frame;
     gs_vec2 framebuffer_size;
+    gs_gui_rect_t viewport;
     gs_gui_container_t* active_root;
 	gs_gui_container_t* hover_root;
 	gs_gui_container_t* next_hover_root;
@@ -938,6 +939,19 @@ typedef struct
     const char* classes[GS_GUI_CLS_SELECTOR_MAX];  // Class selectors
 } gs_gui_selector_desc_t;
 
+enum
+{
+    GS_GUI_HINT_FLAG_NO_SCALE_BIAS_MOUSE = (1 << 0),
+    GS_GUI_HINT_FLAG_NO_INVERT_Y         = (1 << 1)
+};
+
+typedef struct gs_gui_hints_s
+{ 
+    gs_vec2 framebuffer_size;   // Overall framebuffer size
+    gs_gui_rect_t viewport;     // Viewport within framebuffer for gui context
+    int32_t flags;              // Flags for hints
+} gs_gui_hints_t;
+
 GS_API_DECL gs_gui_rect_t gs_gui_rect(float x, float y, float w, float h);
 
 //=== Context ===//
@@ -947,7 +961,7 @@ GS_API_DECL void gs_gui_init(gs_gui_context_t *ctx, uint32_t window_hndl);
 GS_API_DECL void gs_gui_init_font_stash(gs_gui_context_t *ctx, gs_gui_font_stash_desc_t* desc);
 GS_API_DECL gs_gui_context_t gs_gui_context_new(uint32_t window_hndl);
 GS_API_DECL void gs_gui_free(gs_gui_context_t* ctx); 
-GS_API_DECL void gs_gui_begin(gs_gui_context_t *ctx, gs_vec2 framebuffer_size);
+GS_API_DECL void gs_gui_begin(gs_gui_context_t *ctx, const gs_gui_hints_t* hints);
 GS_API_DECL void gs_gui_end(gs_gui_context_t *ctx); 
 GS_API_DECL void gs_gui_render(gs_gui_context_t* ctx, gs_command_buffer_t* cb);
 
@@ -997,7 +1011,7 @@ GS_API_DECL gs_gui_style_t gs_gui_animation_get_blend_style(gs_gui_context_t* ct
 //=== Style Sheet ===//
 
 GS_API_DECL gs_gui_style_sheet_t gs_gui_style_sheet_create(gs_gui_context_t* ctx, gs_gui_style_sheet_desc_t* desc);
-GS_API_DECL void gs_gui_style_sheet_destroy(gs_gui_context_t* ctx, gs_gui_style_sheet_t* ss);
+GS_API_DECL void gs_gui_style_sheet_destroy(gs_gui_style_sheet_t* ss);
 GS_API_DECL void gs_gui_set_element_style(gs_gui_context_t* ctx, gs_gui_element_type element, gs_gui_element_state state, gs_gui_style_element_t* style, size_t size);
 GS_API_DECL void gs_gui_style_sheet_set_element_styles(gs_gui_style_sheet_t* style_sheet, gs_gui_element_type element, gs_gui_element_state state, gs_gui_style_element_t* styles, size_t size);
 GS_API_DECL void gs_gui_set_style_sheet(gs_gui_context_t* ctx, gs_gui_style_sheet_t* style_sheet);
@@ -1045,6 +1059,7 @@ GS_API_DECL void gs_gui_draw_custom(gs_gui_context_t* ctx, gs_gui_rect_t rect, g
 
 //=== Layout ===//
 
+GS_API_DECL gs_gui_layout_t* gs_gui_get_layout(gs_gui_context_t* ctx);
 GS_API_DECL void gs_gui_layout_row(gs_gui_context_t *ctx, int32_t items, const int32_t *widths, int32_t height);
 GS_API_DECL void gs_gui_layout_row_ex(gs_gui_context_t *ctx, int32_t items, const int32_t *widths, int32_t height, int32_t justification);
 GS_API_DECL void gs_gui_layout_width(gs_gui_context_t *ctx, int32_t width);
@@ -1063,7 +1078,7 @@ GS_API_DECL gs_gui_rect_t gs_gui_layout_anchor(const gs_gui_rect_t* parent, int3
 #define gs_gui_slider(_CTX, _VALUE, _LO, _HI)		gs_gui_slider_ex((_CTX), (_VALUE), (_LO), (_HI), 0, GS_GUI_SLIDER_FMT, NULL, GS_GUI_OPT_ALIGNCENTER)
 #define gs_gui_number(_CTX, _VALUE, _STEP)			gs_gui_number_ex((_CTX), (_VALUE), (_STEP), GS_GUI_SLIDER_FMT, NULL, GS_GUI_OPT_ALIGNCENTER)
 #define gs_gui_header(_CTX, _LABEL)		            gs_gui_header_ex((_CTX), (_LABEL), NULL, 0x00)
-#define gs_gui_checkbox(_CTX, _LABEL, _STATE)       gs_gui_checkbox_ex((_CTX), (_LABEL), (_STATE), NULL, 0x00)
+#define gs_gui_checkbox(_CTX, _LABEL, _STATE)       gs_gui_checkbox_ex((_CTX), (_LABEL), (_STATE), NULL, GS_GUI_OPT_LEFTCLICKONLY)
 #define gs_gui_treenode_begin(_CTX, _LABEL)	        gs_gui_treenode_begin_ex((_CTX), (_LABEL), NULL, 0x00)
 #define gs_gui_window_begin(_CTX, _TITLE, _RECT)    gs_gui_window_begin_ex((_CTX), (_TITLE), (_RECT), 0, NULL, 0x00)
 #define gs_gui_popup_begin(_CTX, _TITLE, _RECT)     gs_gui_popup_begin_ex((_CTX), (_TITLE), (_RECT), NULL, 0x00)
@@ -1117,7 +1132,8 @@ GS_API_DECL void gs_gui_undock_ex_cnt(gs_gui_context_t* ctx, gs_gui_container_t*
 
 //=== Gizmo ===//
 
-GS_API_DECL int32_t gs_gui_gizmo(gs_gui_context_t* ctx, gs_camera_t* camera, gs_vqs* model, float snap, int32_t op, int32_t mode, int32_t opt);
+GS_API_DECL int32_t gs_gui_gizmo(gs_gui_context_t* ctx, gs_camera_t* camera, gs_vqs* model, gs_gui_rect_t viewport, 
+    bool invert_view_y, float snap, int32_t op, int32_t mode, int32_t opt);
 
 //=== Implementation ===//
 
@@ -2259,7 +2275,8 @@ static void gs_gui_pop_layout(gs_gui_context_t* ctx)
 	gs_gui_stack_pop(ctx->layout_stack);
 }
 
-static gs_gui_layout_t* gs_gui_get_layout(gs_gui_context_t *ctx) 
+GS_API_DECL gs_gui_layout_t* 
+gs_gui_get_layout(gs_gui_context_t *ctx) 
 {
 	return &ctx->layout_stack.items[ctx->layout_stack.idx - 1];
 }
@@ -2535,7 +2552,8 @@ GS_API_DECL gs_gui_style_sheet_t gs_gui_style_sheet_create(gs_gui_context_t* ctx
     return style_sheet;
 } 
 
-GS_API_DECL void gs_gui_style_sheet_destroy(gs_gui_context_t* ctx, gs_gui_style_sheet_t* ss)
+GS_API_DECL void 
+gs_gui_style_sheet_destroy(gs_gui_style_sheet_t* ss)
 {
     // Need to free all animations
     if (!ss || !ss->animations) {
@@ -2558,12 +2576,14 @@ GS_API_DECL void gs_gui_style_sheet_destroy(gs_gui_context_t* ctx, gs_gui_style_
     gs_hash_table_free(ss->animations);
 }
 
-GS_API_DECL void gs_gui_set_style_sheet(gs_gui_context_t* ctx, gs_gui_style_sheet_t* style_sheet)
+GS_API_DECL void 
+gs_gui_set_style_sheet(gs_gui_context_t* ctx, gs_gui_style_sheet_t* style_sheet)
 {
     ctx->style_sheet = style_sheet ? style_sheet : &gs_gui_default_style_sheet;
 }
 
-GS_API_DECL void gs_gui_style_sheet_set_element_styles(gs_gui_style_sheet_t* ss, gs_gui_element_type element, gs_gui_element_state state, gs_gui_style_element_t* styles, size_t size)
+GS_API_DECL void 
+gs_gui_style_sheet_set_element_styles(gs_gui_style_sheet_t* ss, gs_gui_element_type element, gs_gui_element_state state, gs_gui_style_element_t* styles, size_t size)
 {
     const uint32_t count = size / sizeof(gs_gui_style_element_t);
     uint32_t idx_cnt = 1;
@@ -2799,13 +2819,15 @@ GS_API_DECL gs_gui_container_t* gs_gui_get_container_ex(gs_gui_context_t* ctx, g
 	return cnt;
 }
 
-static int32_t gs_gui_text_width(gs_asset_font_t* font, const char* text, int32_t len) 
+static int32_t 
+gs_gui_text_width(gs_asset_font_t* font, const char* text, int32_t len) 
 { 
     gs_vec2 td = gs_asset_font_text_dimensions(font, text, len);
     return (int32_t)td.x;
 }
 
-static int32_t gs_gui_text_height(gs_asset_font_t* font, const char* text, int32_t len) 
+static int32_t 
+gs_gui_text_height(gs_asset_font_t* font, const char* text, int32_t len) 
 {
     return (int32_t)gs_asset_font_max_height(font);
     gs_vec2 td = gs_asset_font_text_dimensions(font, text, len);
@@ -2813,12 +2835,14 @@ static int32_t gs_gui_text_height(gs_asset_font_t* font, const char* text, int32
 } 
 
 // Grabs max height for a given font
-static int32_t gs_gui_font_height(gs_asset_font_t* font)
+static int32_t 
+gs_gui_font_height(gs_asset_font_t* font)
 {
     return (int32_t)gs_asset_font_max_height(font);
 }
 
-static gs_vec2 gs_gui_text_dimensions(gs_asset_font_t* font, const char* text, int32_t len) 
+static gs_vec2 
+gs_gui_text_dimensions(gs_asset_font_t* font, const char* text, int32_t len) 
 {
     gs_vec2 td = gs_asset_font_text_dimensions(font, text, len);
     return td;
@@ -2828,13 +2852,17 @@ static gs_vec2 gs_gui_text_dimensions(gs_asset_font_t* font, const char* text, i
 // ======== Docking ========== //
 // =========================== //
 
-GS_API_DECL void gs_gui_dock_ex(gs_gui_context_t* ctx, const char* dst, const char* src, int32_t split_type, float ratio)
+GS_API_DECL void 
+gs_gui_dock_ex(gs_gui_context_t* ctx, const char* dst, const char* src, int32_t split_type, float ratio)
 {
+    gs_gui_hints_t hints = gs_default_val();
+    hints.framebuffer_size = gs_platform_framebuffer_sizev(ctx->window_hndl);
+    hints.viewport = gs_gui_rect(0.f, 0.f, 0.f, 0.f);
     uint32_t f = ctx->frame;
-    if (!f) gs_gui_begin(ctx, gs_platform_framebuffer_sizev(ctx->window_hndl));
+    if (!f) gs_gui_begin(ctx, &hints);
     gs_gui_container_t* dst_cnt = gs_gui_get_container(ctx, dst);
     gs_gui_container_t* src_cnt = gs_gui_get_container(ctx, src); 
-    gs_gui_dock_ex_cnt(ctx, dst_cnt, src_cnt, split_type, ratio); 
+    gs_gui_dock_ex_cnt(ctx, dst_cnt, src_cnt, split_type, ratio);
     if (f != ctx->frame) gs_gui_end(ctx);
 }
 
@@ -3534,7 +3562,8 @@ GS_API_DECL void gs_gui_init(gs_gui_context_t *ctx, uint32_t window_hndl)
     key_map[GS_KEYCODE_BACKSPACE     & 0xff] = GS_GUI_KEY_BACKSPACE;
 } 
 
-GS_API_DECL void gs_gui_init_font_stash(gs_gui_context_t* ctx, gs_gui_font_stash_desc_t* desc)
+GS_API_DECL void 
+gs_gui_init_font_stash(gs_gui_context_t* ctx, gs_gui_font_stash_desc_t* desc)
 {
     gs_hash_table_clear(ctx->font_stash);
     uint32_t ct = sizeof(gs_gui_font_desc_t) / desc->size;
@@ -3543,16 +3572,132 @@ GS_API_DECL void gs_gui_init_font_stash(gs_gui_context_t* ctx, gs_gui_font_stash
     }
 }
 
-GS_API_DECL gs_gui_context_t gs_gui_context_new(uint32_t window_hndl)
+GS_API_DECL gs_gui_context_t 
+gs_gui_context_new(uint32_t window_hndl)
 {
     gs_gui_context_t gui = gs_default_val();
     gs_gui_init(&gui, window_hndl);
     return gui;
 }
 
-GS_API_DECL void gs_gui_free(gs_gui_context_t* ctx)
+GS_API_DECL void 
+gs_gui_free(gs_gui_context_t* ctx)
 {
-    // lulz...
+    /*
+typedef struct gs_gui_context_t 
+{ 
+	// Core state
+	gs_gui_style_t* style;              // Active style
+    gs_gui_style_sheet_t* style_sheet;  // Active style sheet
+	gs_gui_id hover;
+	gs_gui_id focus;
+	gs_gui_id last_id;
+    gs_gui_id state_switch_id;          // Id that had a state switch
+    int32_t switch_state;
+    gs_gui_id lock_focus;
+    int32_t last_hover_state;
+    int32_t last_focus_state;
+    gs_gui_id prev_hover;
+    gs_gui_id prev_focus;
+	gs_gui_rect_t last_rect;
+	int32_t last_zindex;
+	int32_t updated_focus;
+	int32_t frame;
+    gs_vec2 framebuffer_size;
+    gs_gui_rect_t viewport;
+    gs_gui_container_t* active_root;
+	gs_gui_container_t* hover_root;
+	gs_gui_container_t* next_hover_root;
+	gs_gui_container_t* scroll_target;
+    gs_gui_container_t* focus_root;
+    gs_gui_container_t* next_focus_root;
+    gs_gui_container_t* dockable_root;
+    gs_gui_container_t* prev_dockable_root;
+    gs_gui_container_t* docked_root;
+    gs_gui_container_t* undock_root;
+    gs_gui_split_t*     focus_split;
+    gs_gui_split_t*     next_hover_split;
+    gs_gui_split_t*     hover_split;
+    gs_gui_id           next_lock_hover_id;
+    gs_gui_id           lock_hover_id;
+	char number_edit_buf[GS_GUI_MAX_FMT];
+	gs_gui_id number_edit;
+    gs_gui_alt_drag_mode_type alt_drag_mode;
+    gs_dyn_array(gs_gui_request_t) requests;
+
+	// Stacks
+	gs_gui_stack(uint8_t, GS_GUI_COMMANDLIST_SIZE) command_list;
+	gs_gui_stack(gs_gui_container_t*, GS_GUI_ROOTLIST_SIZE) root_list;
+	gs_gui_stack(gs_gui_container_t*, GS_GUI_CONTAINERSTACK_SIZE) container_stack;
+	gs_gui_stack(gs_gui_rect_t, GS_GUI_CLIPSTACK_SIZE) clip_stack;
+	gs_gui_stack(gs_gui_id, GS_GUI_IDSTACK_SIZE) id_stack;
+	gs_gui_stack(gs_gui_layout_t, GS_GUI_LAYOUTSTACK_SIZE) layout_stack; 
+
+    // Style sheet element stacks
+    gs_hash_table(gs_gui_element_type, gs_gui_inline_style_stack_t) inline_styles;
+
+	// Retained state pools
+	gs_gui_pool_item_t container_pool[GS_GUI_CONTAINERPOOL_SIZE];
+	gs_gui_container_t containers[GS_GUI_CONTAINERPOOL_SIZE];
+	gs_gui_pool_item_t treenode_pool[GS_GUI_TREENODEPOOL_SIZE];
+
+    gs_slot_array(gs_gui_split_t) splits;
+    gs_slot_array(gs_gui_tab_bar_t) tab_bars;
+
+	// Input state
+	gs_vec2 mouse_pos;
+	gs_vec2 last_mouse_pos;
+	gs_vec2 mouse_delta;
+	gs_vec2 scroll_delta;
+	int32_t mouse_down;
+	int32_t mouse_pressed;
+	int32_t key_down;
+	int32_t key_pressed;
+	char input_text[32]; 
+
+    // Backend resources
+    uint32_t window_hndl;
+    gs_immediate_draw_t gsi;
+    gs_immediate_draw_t overlay_draw_list;                                  
+
+    // Active Transitions
+    gs_hash_table(gs_gui_id, gs_gui_animation_t) animations;
+
+    // Font stash
+    gs_hash_table(uint64_t, gs_asset_font_t*) font_stash;
+
+    // Callbacks
+    struct {
+        gs_gui_on_draw_button_callback button;
+    } callbacks;
+
+} gs_gui_context_t; 
+*/
+   gs_hash_table_free(ctx->font_stash); 
+   gs_immediate_draw_free(&ctx->gsi);
+   gs_immediate_draw_free(&ctx->overlay_draw_list);
+   gs_hash_table_free(ctx->animations);
+   gs_slot_array_free(ctx->splits);
+   gs_slot_array_free(ctx->tab_bars);
+   gs_hash_table_free(ctx->inline_styles);
+
+   // Inline style stacks
+   for(
+       gs_hash_table_iter it = gs_hash_table_iter_new(ctx->inline_styles);
+       gs_hash_table_iter_valid(ctx->inline_styles, it);
+       gs_hash_table_iter_advance(ctx->inline_styles, it)
+   )
+   { 
+       gs_gui_inline_style_stack_t* stack = gs_hash_table_iter_getp(ctx->inline_styles, it); 
+       for (uint32_t i = 0; i < 3; ++i) { 
+           gs_dyn_array_free(stack->styles[i]);
+           gs_dyn_array_free(stack->animations[i]);
+       }
+       gs_dyn_array_free(stack->style_counts);                      // amount of styles to pop off at "top of stack" for each state
+       gs_dyn_array_free(stack->animation_counts);                  // amount of animations to pop off at "top of stack" for each state
+   }
+
+    gs_dyn_array_free(ctx->requests);
 }
 
 static void gs_gui_draw_splits(gs_gui_context_t* ctx, gs_gui_split_t* split)
@@ -3760,14 +3905,41 @@ static void gs_gui_get_split_lowest_zindex(gs_gui_context_t* ctx, gs_gui_split_t
     }
 }
 
-GS_API_DECL void gs_gui_begin(gs_gui_context_t* ctx, gs_vec2 framebuffer_size)
+GS_API_DECL void 
+gs_gui_begin(gs_gui_context_t* ctx, const gs_gui_hints_t* hints)
 { 
+    gs_gui_hints_t default_hints = gs_default_val();
+    default_hints.framebuffer_size = gs_platform_framebuffer_sizev(ctx->window_hndl);
+    default_hints.viewport = gs_gui_rect(0.f, 0.f, default_hints.framebuffer_size.x, default_hints.framebuffer_size.y);
+    gs_gui_hints_t hint = hints ? *hints : default_hints; 
+
+    // Set up viewport
+    gs_gui_rect_t vp = hint.viewport;
+    if (~hint.flags & GS_GUI_HINT_FLAG_NO_INVERT_Y) { 
+        vp.y = hint.viewport.y;
+    } else { 
+        vp.y = hint.framebuffer_size.y - hint.viewport.h - hint.viewport.y; 
+    }
+        
     // Capture event information
-    gs_vec2 platform_m_pos = gs_platform_mouse_positionv();
-	gs_vec2 window_size = gs_platform_framebuffer_sizev(ctx->window_hndl);
-	float percent_x = platform_m_pos.x / window_size.x;
-	float percent_y = platform_m_pos.y / window_size.y;
-	gs_vec2 mouse_pos = gs_v2(framebuffer_size.x * percent_x, framebuffer_size.y * percent_y);
+    gs_vec2 mouse_pos = gs_platform_mouse_positionv();
+
+    // Check for scale and bias
+    if (hint.flags & GS_GUI_HINT_FLAG_NO_SCALE_BIAS_MOUSE) { 
+        float px = (mouse_pos.x - vp.x) / vp.w;
+        float py = (mouse_pos.y - vp.y) / vp.h;
+        float xv = vp.w * px;
+        float yv = vp.h * py;
+        mouse_pos = gs_v2(xv, yv);
+    }
+    else { 
+        gs_vec2 fb_vp_ratio = gs_v2(hint.framebuffer_size.x / vp.w, hint.framebuffer_size.y / vp.h);
+        float px = mouse_pos.x - (vp.x * fb_vp_ratio.x);
+        float py = mouse_pos.y + (vp.y * fb_vp_ratio.y);
+        float xv = px / fb_vp_ratio.x;
+        float yv = py / fb_vp_ratio.y;
+        mouse_pos = gs_v2(xv, yv);
+    }
 
     gs_platform_event_t evt = gs_default_val(); 
     while (gs_platform_poll_events(&evt, false))
@@ -3785,12 +3957,11 @@ GS_API_DECL void gs_gui_begin(gs_gui_context_t* ctx, gs_vec2 framebuffer_size)
 
                     case GS_PLATFORM_MOUSE_WHEEL:
                     {
-                        gs_gui_input_scroll(ctx, 0, (int32_t)(-evt.mouse.wheel.y * 30.f));
+                        gs_gui_input_scroll(ctx, (int32_t)(-evt.mouse.wheel.x * 30.f), (int32_t)(-evt.mouse.wheel.y * 30.f));
                     } break;
 
                     case GS_PLATFORM_MOUSE_BUTTON_DOWN:
-                    case GS_PLATFORM_MOUSE_BUTTON_PRESSED:
-                    {
+                    case GS_PLATFORM_MOUSE_BUTTON_PRESSED: {
                         int32_t code = 1 << evt.mouse.button;
                         gs_gui_input_mousedown(ctx, (int32_t)mouse_pos.x, (int32_t)mouse_pos.y, code);
                     } break;
@@ -3857,8 +4028,9 @@ GS_API_DECL void gs_gui_begin(gs_gui_context_t* ctx, gs_vec2 framebuffer_size)
         }
     }
 
+    ctx->framebuffer_size = hint.framebuffer_size;
+    ctx->viewport = gs_gui_rect(hint.viewport.x, hint.viewport.y, hint.viewport.w, hint.viewport.h);
     ctx->mouse_pos = mouse_pos;
-    ctx->framebuffer_size = framebuffer_size;
 	ctx->command_list.idx = 0;
 	ctx->root_list.idx = 0;
 	ctx->scroll_target = NULL;
@@ -3877,9 +4049,9 @@ GS_API_DECL void gs_gui_begin(gs_gui_context_t* ctx, gs_vec2 framebuffer_size)
 	ctx->frame++; 
 
     // Set up overlay draw list
-    gs_vec2 fbs = framebuffer_size;
-    gsi_camera2D(&ctx->overlay_draw_list, (uint32_t)fbs.x, (uint32_t)fbs.y);
+    gs_vec2 fbs = ctx->framebuffer_size;
     gsi_defaults(&ctx->overlay_draw_list);
+    gsi_camera2D(&ctx->overlay_draw_list, (uint32_t)ctx->viewport.w, (uint32_t)ctx->viewport.h);     // Need to pass in a viewport for this instead
 
     /*
     for (
@@ -4535,9 +4707,11 @@ GS_API_DECL void gs_gui_end(gs_gui_context_t *ctx)
 GS_API_DECL void gs_gui_render(gs_gui_context_t* ctx, gs_command_buffer_t* cb)
 {
     const gs_vec2 fb = ctx->framebuffer_size;
+    const gs_gui_rect_t* viewport = &ctx->viewport;
 
     gsi_defaults(&ctx->gsi);
-    gsi_camera2D(&ctx->gsi, (uint32_t)fb.x, (uint32_t)fb.y);
+    // gsi_camera2D(&ctx->gsi, (uint32_t)fb.x, (uint32_t)fb.y);
+    gsi_camera2D(&ctx->gsi, (uint32_t)viewport->w, (uint32_t)viewport->h);
     gsi_blend_enabled(&ctx->gsi, true);
 
     gs_gui_rect_t clip = gs_gui_unclipped_rect;
@@ -4561,9 +4735,11 @@ GS_API_DECL void gs_gui_render(gs_gui_context_t* ctx, gs_command_buffer_t* cb)
             }
 
             gsi_defaults(&ctx->gsi);
-            gsi_camera2D(&ctx->gsi, (uint32_t)fb.x, (uint32_t)fb.y);
+            // gsi_camera2D(&ctx->gsi, (uint32_t)fb.x, (uint32_t)fb.y);
+            gsi_camera2D(&ctx->gsi, (uint32_t)viewport->w, (uint32_t)viewport->h);
             gsi_blend_enabled(&ctx->gsi, true);
-            gs_graphics_set_viewport(&ctx->gsi.commands, 0, 0, (uint32_t)fb.x, (uint32_t)fb.y);
+            // gs_graphics_set_viewport(&ctx->gsi.commands, 0, 0, (uint32_t)fb.x, (uint32_t)fb.y);
+            gs_graphics_set_viewport(&ctx->gsi.commands, (uint32_t)viewport->x, (uint32_t)viewport->y, (uint32_t)viewport->w, (uint32_t)viewport->h);
 
             gsi_set_view_scissor(&ctx->gsi, 
                 (int32_t)(clip.x), 
@@ -4669,6 +4845,7 @@ GS_API_DECL void gs_gui_render(gs_gui_context_t* ctx, gs_command_buffer_t* cb)
 GS_API_DECL void gs_gui_renderpass_submit(gs_gui_context_t* ctx, gs_command_buffer_t* cb, gs_color_t c)
 {
     gs_vec2 fbs = ctx->framebuffer_size;
+    gs_gui_rect_t* vp = &ctx->viewport;
 	gs_graphics_clear_action_t action = gs_default_val();
 	action.color[0] = (float)c.r / 255.f; 
 	action.color[1] = (float)c.g / 255.f; 
@@ -4679,7 +4856,7 @@ GS_API_DECL void gs_gui_renderpass_submit(gs_gui_context_t* ctx, gs_command_buff
     gs_graphics_renderpass_begin(cb, GS_GRAPHICS_RENDER_PASS_DEFAULT);
     {
         gs_graphics_clear(cb, &clear);
-        gs_graphics_set_viewport(cb, 0, 0, (int)fbs.x,(int)fbs.y);
+        gs_graphics_set_viewport(cb, (uint32_t)vp->x, (uint32_t)vp->y, (uint32_t)vp->w, (uint32_t)vp->h);
         gs_gui_render(ctx, cb);
     }
     gs_graphics_renderpass_end(cb);
@@ -4688,11 +4865,12 @@ GS_API_DECL void gs_gui_renderpass_submit(gs_gui_context_t* ctx, gs_command_buff
 GS_API_DECL void gs_gui_renderpass_submit_ex(gs_gui_context_t* ctx, gs_command_buffer_t* cb, gs_graphics_clear_action_t* action)
 {
     gs_vec2 fbs = ctx->framebuffer_size;
+    gs_gui_rect_t* vp = &ctx->viewport;
     gs_graphics_clear_desc_t clear = gs_default_val();
     clear.actions = action;
-	gs_renderpass pass = gs_default_val();
+	gs_renderpass_t pass = gs_default_val();
 	gs_graphics_renderpass_begin(cb, pass);
-	gs_graphics_set_viewport(cb, 0, 0, (int32_t)fbs.x, (int32_t)fbs.y);
+    gs_graphics_set_viewport(cb, (uint32_t)vp->x, (uint32_t)vp->y, (uint32_t)vp->w, (uint32_t)vp->h);
 	gs_graphics_clear(cb, &clear);
 	gs_gui_render(ctx, cb);
 	gs_graphics_renderpass_end(cb);
@@ -6094,7 +6272,7 @@ GS_API_DECL int32_t gs_gui_checkbox_ex(gs_gui_context_t* ctx, const char* label,
                                gs_gui_get_current_element_style(ctx, desc, elementid, 0x00);
 
 	/* handle click */
-	if (ctx->mouse_pressed == GS_GUI_MOUSE_LEFT && ctx->focus == id) 
+	if ((ctx->mouse_pressed == GS_GUI_MOUSE_LEFT || (ctx->mouse_pressed && ~opt & GS_GUI_OPT_LEFTCLICKONLY)) && ctx->focus == id)
     {
 		res |= GS_GUI_RES_CHANGE;
 		*state = !*state;
@@ -7702,7 +7880,8 @@ GS_API_DECL void gs_gui_window_end(gs_gui_context_t *ctx)
 	gs_gui_root_container_end(ctx); 
 } 
 
-GS_API_DECL void gs_gui_popup_open(gs_gui_context_t* ctx, const char* name) 
+GS_API_DECL void 
+gs_gui_popup_open(gs_gui_context_t* ctx, const char* name) 
 {
 	gs_gui_container_t *cnt = gs_gui_get_container(ctx, name);
 
@@ -7715,18 +7894,21 @@ GS_API_DECL void gs_gui_popup_open(gs_gui_context_t* ctx, const char* name)
 	gs_gui_bring_to_front(ctx, cnt);
 } 
 
-GS_API_DECL int32_t gs_gui_popup_begin_ex(gs_gui_context_t* ctx, const char* name, gs_gui_rect_t r, const gs_gui_selector_desc_t* desc, int32_t opt)
+GS_API_DECL int32_t 
+gs_gui_popup_begin_ex(gs_gui_context_t* ctx, const char* name, gs_gui_rect_t r, const gs_gui_selector_desc_t* desc, int32_t opt)
 {
 	opt |= (GS_GUI_OPT_POPUP | GS_GUI_OPT_NODOCK | GS_GUI_OPT_CLOSED); 
 	return gs_gui_window_begin_ex(ctx, name, r, NULL, NULL, opt);
 } 
 
-GS_API_DECL void gs_gui_popup_end(gs_gui_context_t *ctx) 
+GS_API_DECL void 
+gs_gui_popup_end(gs_gui_context_t *ctx) 
 {
 	gs_gui_window_end(ctx);
 } 
 
-GS_API_DECL void gs_gui_panel_begin_ex(gs_gui_context_t* ctx, const char* name, const gs_gui_selector_desc_t* desc, int32_t opt)
+GS_API_DECL void 
+gs_gui_panel_begin_ex(gs_gui_context_t* ctx, const char* name, const gs_gui_selector_desc_t* desc, int32_t opt)
 {
 	gs_gui_container_t *cnt; 
     const int32_t elementid = GS_GUI_ELEMENT_PANEL;
@@ -7769,13 +7951,15 @@ GS_API_DECL void gs_gui_panel_begin_ex(gs_gui_context_t* ctx, const char* name, 
 	gs_gui_push_clip_rect(ctx, cnt->body);
 } 
 
-GS_API_DECL void gs_gui_panel_end(gs_gui_context_t *ctx) 
+GS_API_DECL void 
+gs_gui_panel_end(gs_gui_context_t *ctx) 
 {
 	gs_gui_pop_clip_rect(ctx);
 	gs_gui_pop_container(ctx);
 } 
 
-static uint8_t uint8_slider(gs_gui_context_t *ctx, unsigned char *value, int low, int high, const gs_gui_selector_desc_t* desc, int32_t opt) 
+static uint8_t 
+uint8_slider(gs_gui_context_t *ctx, unsigned char *value, int low, int high, const gs_gui_selector_desc_t* desc, int32_t opt) 
 {
     static float tmp;
     gs_gui_push_id(ctx, &value, sizeof(value));
@@ -7786,7 +7970,8 @@ static uint8_t uint8_slider(gs_gui_context_t *ctx, unsigned char *value, int low
     return res;
 }
 
-static int32_t int32_slider(gs_gui_context_t *ctx, int32_t* value, int32_t low, int32_t high, const gs_gui_selector_desc_t* desc, int32_t opt) 
+static int32_t 
+int32_slider(gs_gui_context_t *ctx, int32_t* value, int32_t low, int32_t high, const gs_gui_selector_desc_t* desc, int32_t opt) 
 {
     static float tmp;
     gs_gui_push_id(ctx, &value, sizeof(value));
@@ -7797,7 +7982,8 @@ static int32_t int32_slider(gs_gui_context_t *ctx, int32_t* value, int32_t low, 
     return res;
 }
 
-static int16_t int16_slider(gs_gui_context_t *ctx, int16_t* value, int32_t low, int32_t high, const gs_gui_selector_desc_t* desc, int32_t opt) 
+static int16_t 
+int16_slider(gs_gui_context_t *ctx, int16_t* value, int32_t low, int32_t high, const gs_gui_selector_desc_t* desc, int32_t opt) 
 {
     static float tmp;
     gs_gui_push_id(ctx, &value, sizeof(value));
@@ -7857,7 +8043,8 @@ typedef struct {
     gs_gui_axis_t forward;
 } gs_gizmo_rotate_t;
 
-static gs_gizmo_scale_t gs_gizmo_scale(const gs_vqs* parent)
+static gs_gizmo_scale_t 
+gs_gizmo_scale(const gs_vqs* parent)
 {
     gs_gizmo_scale_t gizmo = gs_default_val();
 	const gs_vec3 ax_scl = gs_v3(0.03f, 1.f, 0.03f);
@@ -7907,7 +8094,8 @@ static gs_gizmo_scale_t gs_gizmo_scale(const gs_vqs* parent)
 	return gizmo;
 }
 
-static gs_gizmo_translate_t gs_gizmo_translate(const gs_vqs* parent)
+static gs_gizmo_translate_t 
+gs_gizmo_translate(const gs_vqs* parent)
 {
     gs_gizmo_translate_t trans = gs_default_val();
 	const gs_vec3 ax_scl = gs_v3(0.03f, 1.f, 0.03f);
@@ -7958,7 +8146,8 @@ static gs_gizmo_translate_t gs_gizmo_translate(const gs_vqs* parent)
 	return trans;
 }
 
-static gs_gizmo_rotate_t gs_gizmo_rotate(const gs_vqs* parent)
+static gs_gizmo_rotate_t 
+gs_gizmo_rotate(const gs_vqs* parent)
 {
     gs_gizmo_rotate_t gizmo = gs_default_val();
 	const gs_vec3 ax_scl = gs_v3(1.f, 1.f, 1.f);
@@ -8003,7 +8192,8 @@ typedef struct {
     gs_gui_gizmo_line_intersection_result_t li;
 } gs_gizmo_desc_t;
 
-static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* cmd)
+static void 
+gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* cmd)
 { 
 	const gs_vec2 fbs = ctx->framebuffer_size;
 	const float t = gs_platform_elapsed_time();
@@ -8015,6 +8205,7 @@ static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* c
     const uint16_t segments = 4;
     const gs_gui_gizmo_line_intersection_result_t* li = &desc->li;
     const gs_contact_info_t* info = &desc->info;
+    const uint8_t alpha = 150;
 
 	gsi_defaults(gsi);
 	gsi_depth_enabled(gsi, false);
@@ -8036,7 +8227,7 @@ static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* c
             {\
                 gs_cylinder_t* axis = &desc->gizmo.translate.AXIS.axis.shape.cylinder;\
                 gsi_cylinder(gsi, axis->base.x, axis->base.y, axis->base.z, axis->r,\
-                    axis->r, axis->height, segments, color.r, color.g, color.b, 100, primitive);\
+                    axis->r, axis->height, segments, color.r, color.g, color.b, alpha, primitive);\
             }\
             gsi_pop_matrix(gsi);\
         }\
@@ -8047,7 +8238,7 @@ static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* c
             gsi_mul_matrix(gsi, gs_vqs_to_mat4(&desc->gizmo.translate.AXIS.cap.model));\
             {\
                 gs_cone_t* cap = &desc->gizmo.translate.AXIS.cap.shape.cone;\
-                gsi_cone(gsi, cap->base.x, cap->base.y, cap->base.z, cap->r, cap->height, segments, color.r, color.g, color.b, 100, primitive);\
+                gsi_cone(gsi, cap->base.x, cap->base.y, cap->base.z, cap->r, cap->height, segments, color.r, color.g, color.b, alpha, primitive);\
             }\
             gsi_pop_matrix(gsi);\
         }\
@@ -8066,7 +8257,7 @@ static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* c
             {\
                 gs_cylinder_t* axis = &desc->gizmo.scale.AXIS.axis.shape.cylinder;\
                 gsi_cylinder(gsi, axis->base.x, axis->base.y, axis->base.z, axis->r,\
-                    axis->r, axis->height, segments, color.r, color.g, color.b, 100, primitive);\
+                    axis->r, axis->height, segments, color.r, color.g, color.b, alpha, primitive);\
             }\
             gsi_pop_matrix(gsi);\
         }\
@@ -8079,7 +8270,7 @@ static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* c
                 gs_aabb_t* cap = &desc->gizmo.scale.AXIS.cap.shape.aabb;\
                 gs_vec3 hd = gs_vec3_scale(gs_vec3_sub(cap->max, cap->min), 0.5f);\
                 gs_vec3 c = gs_vec3_add(cap->min, hd);\
-                gsi_box(gsi, c.x, c.y, c.z, hd.x, hd.y, hd.z, color.r, color.g, color.b, 100, primitive);\
+                gsi_box(gsi, c.x, c.y, c.z, hd.x, hd.y, hd.z, color.r, color.g, color.b, alpha, primitive);\
             }\
             gsi_pop_matrix(gsi);\
         }\
@@ -8133,13 +8324,13 @@ static void gs_gui_gizmo_render(gs_gui_context_t* ctx, gs_gui_customcommand_t* c
 
             GS_GUI_GIZMO_AXIS_ROTATE("#gizmo_rotate_right", right, 
                     (cmd->focus == id_u || cmd->focus == id_f) ? gs_color_alpha(GS_COLOR_RED, 25) : 
-                    gs_color_alpha(GS_COLOR_RED, 100));
+                    gs_color_alpha(GS_COLOR_RED, alpha));
             GS_GUI_GIZMO_AXIS_ROTATE("#gizmo_rotate_up", up, 
                     (cmd->focus == id_r || cmd->focus == id_f) ?  gs_color_alpha(GS_COLOR_GREEN, 25) : 
-                    gs_color_alpha(GS_COLOR_GREEN, 100));
+                    gs_color_alpha(GS_COLOR_GREEN, alpha));
             GS_GUI_GIZMO_AXIS_ROTATE("#gizmo_rotate_forward", forward, 
                     (cmd->focus == id_r || cmd->focus == id_u) ? gs_color_alpha(GS_COLOR_BLUE, 25) : 
-                    gs_color_alpha(GS_COLOR_BLUE, 100));
+                    gs_color_alpha(GS_COLOR_BLUE, alpha));
         } break;
     } 
 
@@ -8207,7 +8398,9 @@ static gs_vec3 s_intersection_start = gs_default_val();
 static gs_vqs s_delta = gs_default_val();
 static bool just_set_focus = false;
 
-GS_API_DECL int32_t gs_gui_gizmo(gs_gui_context_t* ctx, gs_camera_t* camera, gs_vqs* model, float snap, int32_t op, int32_t mode, int32_t opt)
+GS_API_DECL int32_t 
+gs_gui_gizmo(gs_gui_context_t* ctx, gs_camera_t* camera, gs_vqs* model, gs_gui_rect_t viewport, 
+    bool invert_view_y, float snap, int32_t op, int32_t mode, int32_t opt)
 {
     int32_t res = 0;
     if (model->rotation.w == 0.f) model->rotation = gs_quat_default();
@@ -8220,9 +8413,34 @@ GS_API_DECL int32_t gs_gui_gizmo(gs_gui_context_t* ctx, gs_camera_t* camera, gs_
     gs_immediate_draw_t* dl = &ctx->overlay_draw_list;
 
     // This doesn't actually work for the clip...
-	gs_gui_rect_t clip = gs_gui_layout_next(ctx);
+    gs_gui_rect_t clip = viewport;
+    if (invert_view_y) {
+        clip.y = fbs.y - clip.h - clip.y;
+    }
 
-    // Transform mouse into viewport space
+    // Capture event information (might have to do something like this for smaller framebuffers scaled to higher viewports)
+    /*
+    gs_vec2 mc = gs_platform_mouse_positionv();
+
+    // Check for scale and bias 
+    int32_t flags = 0x00;
+    if (flags & GS_GUI_HINT_FLAG_NO_SCALE_BIAS_MOUSE) { 
+        float px = (mc.x - clip.x) / clip.w;
+        float py = (mc.y - clip.y) / clip.h;
+        float xv = clip.w * px;
+        float yv = clip.h * py;
+        mc = gs_v2(xv, yv);
+    }
+    else { 
+        gs_vec2 fb_vp_ratio = gs_v2(fbs.x / clip.w, fbs.y / clip.h);
+        float px = mc.x - (clip.x * fb_vp_ratio.x);
+        float py = mc.y + (clip.y * fb_vp_ratio.y);
+        float xv = px / fb_vp_ratio.x;
+        float yv = py / fb_vp_ratio.y;
+        mc = gs_v2(xv, yv);
+    }
+    */
+
     gs_vec2 mc = gs_platform_mouse_positionv();
     mc = gs_vec2_sub(mc, gs_v2(clip.x, clip.y));
 
@@ -8920,7 +9138,8 @@ GS_API_DECL int32_t gs_gui_gizmo(gs_gui_context_t* ctx, gs_camera_t* camera, gs_
 
 //=== Demos ===//
 
-GS_API_DECL int32_t gs_gui_style_editor(gs_gui_context_t *ctx, gs_gui_style_sheet_t* style_sheet, gs_gui_rect_t rect, bool* open) 
+GS_API_DECL int32_t 
+gs_gui_style_editor(gs_gui_context_t *ctx, gs_gui_style_sheet_t* style_sheet, gs_gui_rect_t rect, bool* open) 
 {
     if (!style_sheet)
     {
