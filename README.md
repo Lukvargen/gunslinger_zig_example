@@ -2,6 +2,7 @@
  
  Example project using the [zig](https://ziglang.org/) programming language with the [gunslinger](https://github.com/MrFrenik/gunslinger) framework.
  
+ Tested on windows and linux
  compile and run with: zig build run
  
  Example includes:
