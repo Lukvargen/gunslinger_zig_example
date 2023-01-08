@@ -1,30 +1,35 @@
 const std = @import("std");
 
 pub fn build(b: *std.build.Builder) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{}); // skriv zig build -Drelease-fast=true
 
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
+    const target = b.standardTargetOptions(.{});
+
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("first", "src/main.zig");
-    exe.addCSourceFile("c_include/gs_impl.c", &[_][]const u8 {"-fno-sanitize=undefined"});
-    
-    
-    exe.linkLibC();
 
     exe.linkSystemLibrary("c");
-    exe.linkSystemLibrary("opengl32");
-    exe.linkSystemLibrary("kernel32");
-    exe.linkSystemLibrary("user32");
-    exe.linkSystemLibrary("shell32");
-    exe.linkSystemLibrary("gdi32");
-    exe.linkSystemLibrary("Winmm");
-    exe.linkSystemLibrary("Advapi32");
+    exe.linkLibC();
+
+    if (target.isWindows()) {
+        exe.addCSourceFile("c_include/gs_impl.c", &[_][]const u8{"-fno-sanitize=undefined"});
+
+        exe.linkSystemLibrary("opengl32");
+        exe.linkSystemLibrary("kernel32");
+        exe.linkSystemLibrary("user32");
+        exe.linkSystemLibrary("shell32");
+        exe.linkSystemLibrary("gdi32");
+        exe.linkSystemLibrary("Winmm");
+        exe.linkSystemLibrary("Advapi32");
+    } else if (target.isLinux()) {
+        exe.addCSourceFile("c_include/gs_impl.c", &[_][]const u8{"-fno-sanitize=undefined", "-std=gnu99", "-pthread"});
+
+        exe.linkSystemLibrary("dl");
+        exe.linkSystemLibrary("X11");
+        exe.linkSystemLibrary("Xi");
+        exe.linkSystemLibrary("m");
+        exe.linkSystemLibrary("GL");
+    }
 
     exe.setTarget(target);
     exe.setBuildMode(mode);

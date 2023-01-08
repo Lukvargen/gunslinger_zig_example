@@ -92,35 +92,36 @@ pub fn app_update(...) callconv(.C) void
     var delta = c.gs_platform_delta_time();
     time += delta;
     
-    const fbs = c.gs_platform_framebuffer_sizev(c.gs_platform_main_window());
-
-    // the translated gs vector structs doesnt work that well due to anonymous union
-    const fbsu32 = Vec2u32 {
-        .x = @floatToInt(u32, fbs.unnamed_0.xy[0]),
-        .y = @floatToInt(u32, fbs.unnamed_0.xy[1]),
-    };
+    var fbs_x : u32 = undefined;
+    var fbs_y : u32 = undefined;
+    // for some reason gs_platform_framebuffer_sizev gave garbage on linux
+    c.gs_platform_framebuffer_size(c.gs_platform_main_window(), &fbs_x, &fbs_y);
 
     c.gsi_depth_enabled(&gsi, true);
+    c.gsi_camera3D(&gsi, fbs_x, fbs_y);
 
     var i: i32 = 0;
-    while (i < 100) : (i += 1) {
-        const i_float = @intToFloat(f32, i);
-        c.gsi_camera3D(&gsi, fbsu32.x, fbsu32.y);
-        c.gsi_rotatev(&gsi, c.gs_deg2rad(13.254 * i_float + time * 25.0), c.GS_ZAXIS);
-        c.gsi_rotatev(&gsi,  9273.254 * i_float + time * 1.0, c.GS_YAXIS);
-        const x = 0.0;
-        const y = 0.0;
-        const z = -4.0;
-        const hx = 0.5;
-        const hy = 0.5;
-        const hz = 0.5;
+    var xi: i32 = 0;
+    while (xi < 4) : (xi += 1) {
+        var yi: i32 = 0; 
+        while (yi < 4) : (yi += 1) {
+            var xf = @intToFloat(f32, xi);
+            var yf = @intToFloat(f32, yi);
+            i += 1;
+            const x = xf - 2 + @sin((xf+yf*4.0) + time)*1.0;
+            const y = yf - 2 + @cos((xf+yf*4.0) + time)*1.0;
+            const z = -8.0;
+            const hx = 0.5;
+            const hy = 0.5;
+            const hz = 0.5;
 
-        const red =  @intCast(u8, @mod(200 + i * 25, 255));
+            const red = @floatToInt(u8, (xf*yf/16.0) * 255.0);
 
-        c.gsi_box(&gsi, x, y, z, hx, hy, hz, red, 255, 70, 255, c.GS_GRAPHICS_PRIMITIVE_TRIANGLES);
+            c.gsi_box(&gsi, x, y, z, hx, hy, hz, red, 200.0, 20.0, 255, c.GS_GRAPHICS_PRIMITIVE_TRIANGLES);
+        }
     }
 
-    c.gsi_camera2D(&gsi, fbsu32.x, fbsu32.y);
+    c.gsi_camera2D(&gsi, fbs_x, fbs_y);
 
     var str = string_to_char64_null_term("ms: {d:.3}", .{delta});
     c.gsi_text(&gsi, 5.0, 5.0, &str, 0, 0, 200, 200, 200, 255);
@@ -134,15 +135,15 @@ pub fn app_update(...) callconv(.C) void
     });
 
     var hints = zeroInit(c.gs_gui_hints_t, .{
-        .framebuffer_size = fbs,
-        .viewport = .{.x = 0.0, .y = 0.0, .w = @intToFloat(f32, fbsu32.x), .h = @intToFloat(f32, fbsu32.y)}
+        .framebuffer_size = c.gs_v2(@intToFloat(f32, fbs_x), @intToFloat(f32, fbs_y)),
+        .viewport = .{.x = 0.0, .y = 0.0, .w = @intToFloat(f32, fbs_x), .h = @intToFloat(f32, fbs_y)}
     });
     c.gs_gui_begin(&gui, &hints); 
         _ = c.gs_gui_demo_window(&gui, .{.x = 50.0, .y = 50.0, .w = 200.0, .h= 400.0}, &gui_demo_open);
     c.gs_gui_end(&gui);
 
     c.gs_graphics_renderpass_begin(&cb, c.GS_GRAPHICS_RENDER_PASS_DEFAULT);
-        c.gs_graphics_set_viewport(&cb, 0, 0, fbsu32.x, fbsu32.y);
+        c.gs_graphics_set_viewport(&cb, 0, 0, fbs_x, fbs_y);
         c.gs_graphics_clear(&cb, &clear);
         c.gsi_draw(&gsi, &cb);
 
